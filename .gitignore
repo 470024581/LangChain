@@ -135,6 +135,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+vector_store/
 
 # Spyder project settings
 .spyderproject
