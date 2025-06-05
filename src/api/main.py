@@ -1,6 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +12,7 @@ from ..chains.qa_chain import DocumentQAChain, ConversationalRetrievalChain
 from ..vectorstores.vector_store import VectorStoreManager
 from ..memory.conversation_memory import SessionManager
 from ..config.settings import settings
+from ..utils.langsmith_utils import langsmith_manager, get_langsmith_config
 
 # 配置日志
 logging.basicConfig(
@@ -159,14 +160,61 @@ async def health_check():
         # 检查各组件状态
         qa_status = qa_chain is not None
         vector_status = vector_store_manager is not None and vector_store_manager.vector_store is not None
+        langsmith_status = langsmith_manager.is_enabled
         
         return {
             "status": "healthy" if qa_status and vector_status else "unhealthy",
             "qa_chain": "ready" if qa_status else "not ready",
-            "vector_store": "ready" if vector_status else "not ready"
+            "vector_store": "ready" if vector_status else "not ready",
+            "langsmith": "enabled" if langsmith_status else "disabled"
         }
     except Exception as e:
         return {"status": "unhealthy", "error": str(e)}
+
+
+@app.get("/langsmith/config")
+async def get_langsmith_config_endpoint():
+    """获取 LangSmith 配置信息"""
+    try:
+        config = get_langsmith_config()
+        return {
+            "langsmith_config": config,
+            "status": "success"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+
+@app.post("/langsmith/feedback")
+async def submit_langsmith_feedback(
+    run_id: str,
+    key: str,
+    score: float,
+    comment: Optional[str] = None
+):
+    """提交 LangSmith 反馈"""
+    try:
+        if not langsmith_manager.is_enabled:
+            raise HTTPException(status_code=400, detail="LangSmith 未启用")
+        
+        langsmith_manager.log_feedback(
+            run_id=run_id,
+            key=key,
+            score=score,
+            comment=comment
+        )
+        
+        return {
+            "status": "success",
+            "message": "反馈已提交"
+        }
+        
+    except Exception as e:
+        logger.error(f"提交 LangSmith 反馈失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"提交反馈失败: {str(e)}")
 
 
 @app.post("/ask", response_model=QuestionResponse)
@@ -286,6 +334,261 @@ async def rebuild_vector_store(
     except Exception as e:
         logger.error(f"重建向量存储失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"重建向量存储失败: {str(e)}")
+
+
+@app.get("/debug/config")
+async def debug_config():
+    """调试配置信息（仅用于开发调试）"""
+    try:
+        import os
+        from ..config.settings import settings
+        
+        return {
+            "settings": {
+                "langchain_tracing_v2": settings.langchain_tracing_v2,
+                "langchain_project": settings.langchain_project,
+                "langchain_endpoint": settings.langchain_endpoint,
+                "langchain_api_key": settings.langchain_api_key[:10] + "..." if settings.langchain_api_key else None
+            },
+            "environment_variables": {
+                "LANGCHAIN_TRACING_V2": os.getenv("LANGCHAIN_TRACING_V2"),
+                "LANGCHAIN_PROJECT": os.getenv("LANGCHAIN_PROJECT"), 
+                "LANGCHAIN_ENDPOINT": os.getenv("LANGCHAIN_ENDPOINT"),
+                "LANGCHAIN_API_KEY": os.getenv("LANGCHAIN_API_KEY")[:10] + "..." if os.getenv("LANGCHAIN_API_KEY") else None
+            }
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# ===============================
+# 评估相关端点
+# ===============================
+
+@app.post("/evaluation/datasets/create")
+async def create_evaluation_dataset(
+    name: str,
+    description: str = "",
+    examples: List[Dict[str, Any]] = []
+):
+    """创建评估数据集"""
+    try:
+        from ..evaluation.datasets import EvaluationDataset, DatasetManager
+        
+        dataset = EvaluationDataset(name=name, description=description)
+        if examples:
+            dataset.add_examples_from_list(examples)
+        
+        dataset_manager = DatasetManager()
+        file_path = dataset_manager.save_dataset(dataset)
+        
+        # 如果 LangSmith 启用，也上传到云端
+        dataset_id = None
+        if langsmith_manager.is_enabled:
+            dataset_id = dataset.upload_to_langsmith()
+        
+        return {
+            "message": "数据集创建成功",
+            "dataset_name": name,
+            "examples_count": len(dataset),
+            "file_path": file_path,
+            "langsmith_dataset_id": dataset_id
+        }
+        
+    except Exception as e:
+        logger.error(f"创建评估数据集失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"创建数据集失败: {str(e)}")
+
+
+@app.post("/evaluation/datasets/create-default")
+async def create_default_evaluation_datasets():
+    """创建默认评估数据集"""
+    try:
+        from ..evaluation.datasets import DatasetManager
+        
+        dataset_manager = DatasetManager()
+        dataset_manager.create_default_datasets()
+        
+        datasets = dataset_manager.list_datasets()
+        
+        return {
+            "message": "默认数据集创建成功",
+            "datasets": datasets
+        }
+        
+    except Exception as e:
+        logger.error(f"创建默认数据集失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"创建默认数据集失败: {str(e)}")
+
+
+@app.get("/evaluation/datasets")
+async def list_evaluation_datasets():
+    """列出所有评估数据集"""
+    try:
+        from ..evaluation.datasets import DatasetManager
+        
+        dataset_manager = DatasetManager()
+        datasets = dataset_manager.list_datasets()
+        
+        return {"datasets": datasets}
+        
+    except Exception as e:
+        logger.error(f"获取数据集列表失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取数据集列表失败: {str(e)}")
+
+
+@app.post("/evaluation/run")
+async def run_evaluation(
+    dataset_name: str,
+    evaluator_types: List[str] = ["accuracy", "relevance", "helpfulness", "groundedness"],
+    use_conversational: bool = False,
+    max_concurrency: int = 3,
+    qa_chain: DocumentQAChain = Depends(get_qa_chain),
+    conv_chain: ConversationalRetrievalChain = Depends(get_conversational_chain)
+):
+    """运行模型评估"""
+    try:
+        from ..evaluation.datasets import DatasetManager
+        from ..evaluation.runners import EvaluationRunner, EvaluationManager
+        
+        # 加载数据集
+        dataset_manager = DatasetManager()
+        dataset = dataset_manager.load_dataset(dataset_name)
+        if not dataset:
+            raise HTTPException(status_code=404, detail=f"数据集 '{dataset_name}' 不存在")
+        
+        # 创建评估运行器
+        runner = EvaluationRunner(qa_chain=qa_chain, conversational_chain=conv_chain)
+        
+        # 运行评估
+        logger.info(f"开始运行评估: {dataset_name}")
+        report = await runner.run_evaluation(
+            dataset=dataset,
+            evaluator_types=evaluator_types,
+            use_conversational=use_conversational,
+            max_concurrency=max_concurrency
+        )
+        
+        # 保存报告
+        eval_manager = EvaluationManager()
+        report_file = eval_manager.save_report(report)
+        
+        return {
+            "message": "评估完成",
+            "dataset_name": dataset_name,
+            "total_examples": report.total_examples,
+            "avg_scores": report.avg_scores,
+            "execution_time": report.execution_time,
+            "report_file": report_file
+        }
+        
+    except Exception as e:
+        logger.error(f"运行评估失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"评估失败: {str(e)}")
+
+
+@app.post("/evaluation/run-langsmith")
+async def run_langsmith_evaluation(
+    dataset_name: str,
+    experiment_name: str = None,
+    evaluator_types: List[str] = ["accuracy", "relevance", "helpfulness"],
+    use_conversational: bool = False,
+    qa_chain: DocumentQAChain = Depends(get_qa_chain),
+    conv_chain: ConversationalRetrievalChain = Depends(get_conversational_chain)
+):
+    """在 LangSmith 上运行评估"""
+    try:
+        if not langsmith_manager.is_enabled:
+            raise HTTPException(status_code=400, detail="LangSmith 未启用")
+        
+        from ..evaluation.runners import EvaluationRunner
+        
+        # 创建评估运行器
+        runner = EvaluationRunner(qa_chain=qa_chain, conversational_chain=conv_chain)
+        
+        # 在 LangSmith 上运行评估
+        experiment_name = runner.run_langsmith_evaluation(
+            dataset_name=dataset_name,
+            experiment_name=experiment_name,
+            evaluator_types=evaluator_types,
+            use_conversational=use_conversational
+        )
+        
+        if not experiment_name:
+            raise HTTPException(status_code=500, detail="LangSmith 评估启动失败")
+        
+        return {
+            "message": "LangSmith 评估已启动",
+            "experiment_name": experiment_name,
+            "dataset_name": dataset_name,
+            "evaluator_types": evaluator_types
+        }
+        
+    except Exception as e:
+        logger.error(f"LangSmith 评估失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"LangSmith 评估失败: {str(e)}")
+
+
+@app.get("/evaluation/reports")
+async def list_evaluation_reports():
+    """列出所有评估报告"""
+    try:
+        from ..evaluation.runners import EvaluationManager
+        
+        eval_manager = EvaluationManager()
+        reports = eval_manager.list_reports()
+        
+        return {"reports": reports}
+        
+    except Exception as e:
+        logger.error(f"获取评估报告列表失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取报告列表失败: {str(e)}")
+
+
+@app.get("/evaluation/reports/{report_file:path}")
+async def get_evaluation_report(report_file: str):
+    """获取评估报告详情"""
+    try:
+        from ..evaluation.runners import EvaluationManager
+        
+        eval_manager = EvaluationManager()
+        report = eval_manager.load_report(report_file)
+        
+        if not report:
+            raise HTTPException(status_code=404, detail="报告文件不存在")
+        
+        return report.to_dict()
+        
+    except Exception as e:
+        logger.error(f"获取评估报告失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取报告失败: {str(e)}")
+
+
+@app.get("/evaluation/summary")
+async def get_evaluation_summary():
+    """获取评估汇总报告"""
+    try:
+        from ..evaluation.runners import EvaluationManager
+        
+        eval_manager = EvaluationManager()
+        report_files = eval_manager.list_reports()
+        
+        reports = []
+        for report_file in report_files:
+            report = eval_manager.load_report(report_file)
+            if report:
+                reports.append(report)
+        
+        summary = eval_manager.generate_summary_report(reports)
+        
+        return {
+            "summary": summary,
+            "total_report_files": len(report_files)
+        }
+        
+    except Exception as e:
+        logger.error(f"获取评估汇总失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取汇总失败: {str(e)}")
 
 
 if __name__ == "__main__":

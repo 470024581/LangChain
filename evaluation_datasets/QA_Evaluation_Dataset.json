@@ -1,0 +1,46 @@
+{
+  "name": "QA_Evaluation_Dataset",
+  "description": "问答系统评估数据集",
+  "examples": [
+    {
+      "question": "什么是Python？",
+      "expected_answer": "Python是一种高级编程语言，以其简洁易读的语法而著称。它支持多种编程范式，包括面向对象、命令式和函数式编程。",
+      "context": null,
+      "session_id": null,
+      "metadata": {
+        "category": "programming",
+        "difficulty": "basic"
+      }
+    },
+    {
+      "question": "Python有哪些主要特点？",
+      "expected_answer": "Python的主要特点包括：1)语法简洁清晰 2)跨平台支持 3)丰富的标准库 4)强大的第三方生态 5)解释型语言 6)动态类型系统",
+      "context": null,
+      "session_id": null,
+      "metadata": {
+        "category": "programming",
+        "difficulty": "intermediate"
+      }
+    },
+    {
+      "question": "如何学习Python编程？",
+      "expected_answer": "学习Python建议：1)掌握基础语法 2)多做练习项目 3)阅读优秀代码 4)使用官方文档 5)参与开源项目 6)持续实践",
+      "context": null,
+      "session_id": null,
+      "metadata": {
+        "category": "learning",
+        "difficulty": "basic"
+      }
+    },
+    {
+      "question": "Python适合哪些应用领域？",
+      "expected_answer": "Python广泛应用于：Web开发、数据科学、人工智能、机器学习、自动化脚本、科学计算、游戏开发等领域。",
+      "context": null,
+      "session_id": null,
+      "metadata": {
+        "category": "applications",
+        "difficulty": "intermediate"
+      }
+    }
+  ]
+}

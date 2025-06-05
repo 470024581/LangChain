@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     memory_k: int = Field(5, env="MEMORY_K")
     max_token_limit: int = Field(2000, env="MAX_TOKEN_LIMIT")
     
+    # LangSmith配置
+    langchain_tracing_v2: bool = Field(False, env="LANGCHAIN_TRACING_V2")
+    langchain_api_key: Optional[str] = Field(None, env="LANGCHAIN_API_KEY")
+    langchain_project: str = Field("Default", env="LANGCHAIN_PROJECT")
+    langchain_endpoint: str = Field("https://api.smith.langchain.com", env="LANGCHAIN_ENDPOINT")
+    
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

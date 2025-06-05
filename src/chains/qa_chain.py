@@ -5,11 +5,13 @@ from langchain_core.documents import Document
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.runnables import Runnable, RunnablePassthrough, RunnableLambda, RunnableParallel
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables.config import RunnableConfig
 
 from ..models.llm_factory import LLMFactory
 from ..vectorstores.vector_store import VectorStoreManager
 from ..prompts.prompt_templates import PromptTemplateManager, PromptFormatter
 from ..memory.conversation_memory import ConversationMemoryManager
+from ..utils.langsmith_utils import langsmith_manager, with_langsmith_tracing
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +50,12 @@ class DocumentQAChain:
         # 构建链
         self.chain = self._build_chain()
         
+        # 配置 LangSmith 追踪
+        self._configure_langsmith()
+        
         logger.info(f"文档问答链初始化完成，使用模型: {model_name or 'default'}")
+        if langsmith_manager.is_enabled:
+            logger.info("LangSmith 追踪已启用")
     
     def _get_retriever(self) -> BaseRetriever:
         """获取检索器"""
@@ -101,6 +108,27 @@ class DocumentQAChain:
         
         return chain
     
+    def _configure_langsmith(self):
+        """配置 LangSmith 追踪"""
+        if langsmith_manager.is_enabled:
+            # 为链添加 LangSmith 回调
+            callbacks = langsmith_manager.get_callbacks()
+            if callbacks:
+                self.langsmith_config = RunnableConfig(
+                    callbacks=callbacks,
+                    tags=["DocumentQAChain", f"memory_{self.use_memory}"],
+                    metadata={
+                        "retriever_k": self.retriever_k,
+                        "use_memory": self.use_memory,
+                        "model": getattr(self.llm, 'model_name', 'unknown')
+                    }
+                )
+            else:
+                self.langsmith_config = None
+        else:
+            self.langsmith_config = None
+
+    @with_langsmith_tracing(name="DocumentQAChain.invoke", tags=["qa", "invoke"])
     def invoke(
         self, 
         question: str, 
@@ -130,8 +158,11 @@ class DocumentQAChain:
             else:
                 input_data = question
             
-            # 调用链
-            answer = self.chain.invoke(input_data)
+            # 调用链（如果启用 LangSmith，使用配置）
+            if self.langsmith_config:
+                answer = self.chain.invoke(input_data, config=self.langsmith_config)
+            else:
+                answer = self.chain.invoke(input_data)
             
             # 获取相关文档
             relevant_docs = self.retriever.get_relevant_documents(question)

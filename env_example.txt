@@ -1,0 +1,42 @@
+# OpenRouter API配置
+OPENROUTER_API_KEY=your_openrouter_api_key_here
+OPENROUTER_API_BASE=https://openrouter.ai/api/v1
+
+# 默认模型配置
+DEFAULT_MODEL=gpt-4o-mini
+
+# LLM参数配置
+OPENAI_TEMPERATURE=0.1
+OPENAI_MAX_TOKENS=2000
+OPENAI_TOP_P=1.0
+OPENAI_FREQUENCY_PENALTY=0.0
+OPENAI_PRESENCE_PENALTY=0.0
+
+# 向量数据库配置
+VECTOR_STORE_PATH=./vector_store
+
+# API服务配置
+API_HOST=0.0.0.0
+API_PORT=8000
+
+# 文档处理配置
+CHUNK_SIZE=1000
+CHUNK_OVERLAP=200
+
+# 数据目录
+DATA_DIRECTORY=./data
+
+# 检索配置
+RETRIEVER_K=4
+SEARCH_TYPE=similarity
+
+# 记忆配置
+MEMORY_TYPE=buffer_window
+MEMORY_K=5
+MAX_TOKEN_LIMIT=2000
+
+# LangSmith配置（可选）
+# LANGCHAIN_TRACING_V2=true
+# LANGCHAIN_API_KEY=your_langsmith_api_key_here
+# LANGCHAIN_PROJECT=your_project_name
+# LANGCHAIN_ENDPOINT=https://api.smith.langchain.com 
