@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     chunk_overlap: int = Field(200, env="CHUNK_OVERLAP")
     
     # 数据目录
-    data_directory: str = Field("./data", env="DATA_DIRECTORY")
+    data_directory: str = Field("./data/document", env="DATA_DIRECTORY")
     
     # 检索配置
     retriever_k: int = Field(4, env="RETRIEVER_K")

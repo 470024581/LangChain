@@ -1,0 +1,600 @@
+product_id,product_name,category,unit_price
+P0001,QuantumCore Laptop Pro X1,Electronics,1299.99
+P0002,NovaStream Wireless Mouse,Accessories,29.99
+P0003,OrionDesk Ergonomic Chair,Office Furniture,249.50
+P0004,AuraGlow Smart Bulb (2-Pack),Home Automation,35.00
+P0005,TerraByte External SSD 1TB,Storage,89.99
+P0006,HydroFlask Insulated Bottle,Lifestyle,25.00
+P0007,Zenith Bluetooth Headphones,Audio,79.99
+P0008,CosmoView 27-inch Monitor,Electronics,299.00
+P0009,StellarGrip Phone Holder,Accessories,15.99
+P0010,FlexiFit Yoga Mat,Sports & Outdoors,22.50
+P0011,ChronoGuard Smartwatch Series 5,Wearables,199.00
+P0012,GigaPower Portable Charger,Accessories,45.75
+P0013,SilentKey Mechanical Keyboard,Electronics,119.99
+P0014,AquaPure Water Filter Pitcher,Home Goods,32.00
+P0015,AeroSpeed Running Shoes,Footwear,85.00
+P0016,CulinaryMaster Chef Knife Set,Kitchenware,150.00
+P0017,SolarFlare Garden Lights (4-Pack),Outdoor,40.50
+P0018,CodeWeaver Pro IDE Software,Software,99.00
+P0019,RoboVac Smart Cleaner X200,Home Appliances,279.99
+P0020,DataSafe Encrypted USB Drive 128GB,Storage,55.25
+P0021,VisionMax VR Headset,Gaming,349.00
+P0022,PowerCore Desktop PC (i7, 16GB RAM),Electronics,899.00
+P0023,EcoPrint Recycled Paper (500 Sheets),Office Supplies,12.99
+P0024,GamerPro XL Mousepad,Accessories,19.99
+P0025,SoundWave Mini Bluetooth Speaker,Audio,39.95
+P0026,TravelMate Suitcase Set (3-Piece),Travel,180.00
+P0027,PureAroma Essential Oil Diffuser,Health & Wellness,28.50
+P0028,OptiFocus Reading Glasses (+2.0),Eyewear,18.00
+P0029,BuildRight 3D Printer Filament (PLA, Black),Crafting,22.00
+P0030,NatureScape Canvas Wall Art,Decor,65.00
+P0031,PetPal Automatic Feeder,Pet Supplies,75.00
+P0032,GreenThumb Gardening Tool Set,Garden,48.99
+P0033,AutoShine Car Wax Kit,Automotive,33.50
+P0034,FitTrack Pro Fitness Band,Wearables,59.99
+P0035,MemoryFoam Lumbar Support Pillow,Comfort,26.75
+P0036,GourmetBlend Coffee Beans (1kg),Groceries,19.50
+P0037,MasterSketch Drawing Tablet,Art Supplies,110.00
+P0038,KnitJoy Yarn Bundle (Assorted Colors),Crafting,30.00
+P0039,SafeGuard Home Security Camera,Security,95.00
+P0040,BrightBeam LED Flashlight,Tools,16.99
+P0041,PowerDrill X500 Cordless,Tools,89.00
+P0042,ClearSound Conference Mic,Office Electronics,65.50
+P0043,CloudNine Silk Pillowcase,Bedding,29.99
+P0044,BakeEasy Non-Stick Pan Set,Kitchenware,70.00
+P0045,AquaSplash Swim Goggles,Sports & Outdoors,14.50
+P0046,LearnFast Language Software (Spanish),Software,49.99
+P0047,WriteWell Fountain Pen,Stationery,38.00
+P0048,MightyMug Unspillable Travel Mug,Lifestyle,24.95
+P0049,TuneFlow Wireless Earbuds,Audio,55.00
+P0050,OfficePro Shredder (8-Sheet),Office Supplies,45.99
+P0051,NovaBook UltraSlim Laptop,Electronics,999.00
+P0052,ErgoTouch Vertical Mouse,Accessories,34.99
+P0053,LumiDesk LED Lamp with Charger,Office Furniture,42.50
+P0054,ConnectHub USB-C Docking Station,Electronics,79.00
+P0055,DataVault NAS Enclosure (2-Bay),Storage,159.99
+P0056,EcoBlend Bamboo Cutting Board,Kitchenware,18.50
+P0057,ActiveLife Resistance Band Set,Sports & Outdoors,16.00
+P0058,StudioMic Pro Condenser Microphone,Audio,129.00
+P0059,QuickCharge Wireless Charging Pad,Accessories,25.99
+P0060,ComfyRide Bike Seat Cushion,Sports & Outdoors,20.00
+P0061,CyberSecure VPN Subscription (1 Year),Software,59.00
+P0062,PowerMax Gaming PC (Ryzen 7, RTX 4070),Electronics,1499.00
+P0063,PrintPerfect Photo Paper (100 Sheets),Office Supplies,24.99
+P0064,AudioBlast Gaming Headset,Gaming,89.95
+P0065,SoundProof Acoustic Panels (6-Pack),Audio Equipment,49.00
+P0066,GlobeTrotter Universal Adapter,Travel,19.99
+P0067,NutriBlend Personal Blender,Home Appliances,38.50
+P0068,VisionPlus Blue Light Blocking Glasses,Eyewear,22.00
+P0069,Craftopia Polymer Clay Set,Crafting,27.50
+P0070,SereneScapes Zen Garden Kit,Decor,35.00
+P0071,Pawsome Interactive Cat Toy,Pet Supplies,15.99
+P0072,GrowMaster Indoor Herb Garden Kit,Garden,55.00
+P0073,CleanWheels Tire Shine Spray,Automotive,12.50
+P0074,PulseBeat Heart Rate Monitor,Wearables,79.99
+P0075,PostureCorrect Back Brace,Health & Wellness,33.25
+P0076,ArtisanRoast Espresso Beans (500g),Groceries,15.00
+P0077,DigitalPainter Pro Graphics Tablet,Art Supplies,299.00
+P0078,CozyCrochet Hook Set,Crafting,18.00
+P0079,AlertPro Personal Safety Alarm,Security,12.99
+P0080,MaxLumen Tactical Flashlight,Tools,28.99
+P0081,PrecisionDrill Bit Set (30-Piece),Tools,39.00
+P0082,CrystalVoice USB Microphone,Office Electronics,49.50
+P0083,DreamWeave Cotton Sheet Set (Queen),Bedding,59.99
+P0084,ProBake Silicone Mat Set,Kitchenware,19.00
+P0085,HydroGlide Kayak Paddle,Sports & Outdoors,65.00
+P0086,LinguaPro Translation Software,Software,79.99
+P0087,EleganceRollerball Pen Set,Stationery,28.00
+P0088,SmartSip Temperature Control Mug,Lifestyle,89.95
+P0089,BassBoost Wireless Headphones,Audio,99.00
+P0090,SecureShred Micro-Cut Shredder,Office Supplies,75.99
+P0091,TechTablet Android 12 (10-inch),Electronics,189.00
+P0092,SwiftType Compact Keyboard,Accessories,49.00
+P0093,DeskOrganizer Pro Set,Office Supplies,32.00
+P0094,PowerBrick Universal Laptop Charger,Accessories,38.50
+P0095,GigaStore External HDD 2TB,Storage,69.99
+P0096,GourmetSpice Rack (16 Jars),Kitchenware,45.00
+P0097,ProStretch Resistance Loops,Sports & Outdoors,12.00
+P0098,ClearCast Podcasting Microphone,Audio,109.00
+P0099,FastCharge Multi-Port USB Hub,Accessories,29.99
+P0100,CycleComfort Gel Bike Gloves,Sports & Outdoors,17.50 P0101,SolarMax 372,Health & Wellness,109.99
+P0102,DataSeries 9 109,Groceries,1012.09
+P0103,DeltaVac 924,Home Automation,1275.86
+P0104,ZetaGlow 150,Office Supplies,481.73
+P0105,SilentFlow 902,Office Supplies,1494.77
+P0106,DataCore 815,Stationery,903.88
+P0107,PowerX1 942,Security,947.85
+P0108,EcoFlare 912,Travel,886.04
+P0109,GammaFlow 678,Home Automation,336.6
+P0110,DataPlus 238,Automotive,319.89
+P0111,NovaVac 146,Sports & Outdoors,689.99
+P0112,NovaZ200 431,Security,573.3
+P0113,EpsilonByte 321,Pet Supplies,543.39
+P0114,CulinaryGlow 709,Sports & Outdoors,84.8
+P0115,BetaFlare 832,Bedding,138.66
+P0116,SilentVac 176,Home Goods,405.89
+P0117,EpsilonSeries 9 236,Stationery,166.57
+P0118,RoboFlow 789,Comfort,577.58
+P0119,HydroVac 622,Travel,528.83
+P0120,CulinaryZ200 373,Security,705.29
+P0121,ZenithCast 603,Home Goods,36.04
+P0122,VisionGlow 582,Office Furniture,1352.13
+P0123,TerraFlow 658,Garden,335.12
+P0124,GammaMini 164,Outdoor,1223.08
+P0125,OmegaCast 388,Automotive,1206.17
+P0126,HydroMate 500,Electronics,250.96
+P0127,EcoPrint 922,Home Goods,556.73
+P0128,HydroMax 342,Outdoor,218.43
+P0129,ZetaFlare 160,Outdoor,89.87
+P0130,RoboGlow 709,Software,968.66
+P0131,ChronoSafe 547,Sports & Outdoors,270.64
+P0132,StellarKey 226,Home Automation,444.05
+P0133,OrionDrill 762,Groceries,760.23
+P0134,OmegaStream 244,Decor,1320.06
+P0135,DeltaDrill 624,Gaming,1399.75
+P0136,SilentMate 316,Accessories,355.83
+P0137,NovaGlow 497,Tools,92.41
+P0138,OrionDesk 580,Stationery,531.89
+P0139,StellarSpeed 892,Garden,1020.68
+P0140,StellarSpeed 318,Accessories,1146.56
+P0141,VisionFlow 119,Garden,868.23
+P0142,AlphaZ200 133,Travel,186.32
+P0143,PowerFlare 399,Sports & Outdoors,1426.72
+P0144,PowerSafe 110,Stationery,11.59
+P0145,RoboDrill 291,Art Supplies,42.81
+P0146,FlexiFlow 576,Pet Supplies,951.5
+P0147,VisionPlus 966,Office Supplies,439.36
+P0148,TerraByte 149,Home Goods,20.8
+P0149,GammaPro 528,Eyewear,472.26
+P0150,AeroCast 686,Comfort,763.73
+P0151,SilentGuard 621,Lifestyle,685.71
+P0152,DeltaPure 956,Electronics,1236.5
+P0153,HydroPure 421,Gaming,1488.6
+P0154,ChronoFit 425,Wearables,124.19
+P0155,CosmoFlare 485,Automotive,99.83
+P0156,VisionCast 898,Garden,907.44
+P0157,HydroPro 830,Office Furniture,1080.65
+P0158,EcoFlow 944,Crafting,10.13
+P0159,ChronoCast 147,Health & Wellness,891.67
+P0160,BetaMini 721,Software,1133.6
+P0161,SilentFit 891,Sports & Outdoors,354.37
+P0162,RoboFlare 599,Home Goods,1452.9
+P0163,RoboPlus 650,Travel,988.55
+P0164,AlphaPro 826,Garden,762.95
+P0165,HydroFlow 116,Software,672.37
+P0166,SilentFit 588,Tools,294.97
+P0167,BetaVac 984,Office Furniture,268.23
+P0168,TerraX1 199,Eyewear,147.45
+P0169,StellarMini 419,Wearables,959.41
+P0170,NovaGlow 821,Stationery,57.82
+P0171,SolarPure 439,Gaming,958.27
+P0172,OmegaDesk 908,Art Supplies,951.07
+P0173,ZenithFlare 395,Office Furniture,126.47
+P0174,AuraFlow 147,Art Supplies,991.37
+P0175,AlphaMini 790,Groceries,757.44
+P0176,AeroFit 539,Comfort,144.43
+P0177,TerraStream 640,Travel,922.05
+P0178,SilentUltra 123,Lifestyle,1012.6
+P0179,HydroUltra 486,Office Supplies,354.4
+P0180,StellarByte 215,Lifestyle,731.5
+P0181,StellarMate 754,Garden,501.85
+P0182,StellarWave 614,Stationery,318.99
+P0183,GammaMini 298,Software,752.94
+P0184,QuantumUltra 551,Electronics,1219.9
+P0185,OmegaMaster 403,Comfort,911.03
+P0186,TerraSpeed 741,Storage,1312.5
+P0187,StellarFlow 782,Accessories,425.11
+P0188,GigaGuard 886,Security,37.2
+P0189,AuraVac 265,Stationery,1124.86
+P0190,VisionPrint 182,Travel,1393.65
+P0191,FlexiUltra 779,Wearables,403.22
+P0192,FlexiGrip 225,Kitchenware,1389.36
+P0193,GamerCore 197,Tools,227.79
+P0194,OmegaDesk 403,Wearables,583.15
+P0195,AquaFlow 206,Bedding,461.11
+P0196,ZenithFlow 785,Tools,160.68
+P0197,OrionDesk 961,Travel,951.17
+P0198,CulinaryFlow 719,Wearables,773.15
+P0199,FlexiPure 195,Sports & Outdoors,646.36
+P0200,StellarCast 639,Comfort,785.28
+P0201,GamerX1 900,Stationery,101.08
+P0202,AlphaCast 769,Lifestyle,286.74
+P0203,DeltaKey 626,Health & Wellness,1427.62
+P0204,TerraMate 765,Automotive,87.34
+P0205,GigaStream 805,Accessories,455.92
+P0206,GigaZ200 894,Bedding,1330.42
+P0207,ZetaStream 850,Groceries,1188.42
+P0208,OmegaByte 909,Gaming,558.14
+P0209,SilentKey 245,Office Supplies,302.49
+P0210,AlphaPro 536,Eyewear,6.02
+P0211,StellarPro 854,Software,153.82
+P0212,ZenithCore 673,Tools,1080.32
+P0213,PowerVac 228,Office Supplies,123.48
+P0214,ZetaGrip 646,Home Appliances,635.51
+P0215,VisionZ200 417,Home Automation,425.5
+P0216,QuantumDesk 716,Health & Wellness,529.79
+P0217,SilentDesk 556,Health & Wellness,1046.8
+P0218,BetaCast 928,Automotive,524.08
+P0219,AquaByte 221,Sports & Outdoors,1253.57
+P0220,ZetaZ200 392,Security,1334.03
+P0221,PowerMaster 148,Stationery,1169.36
+P0222,CosmoMaster 995,Decor,165.91
+P0223,ZetaDrill 332,Travel,978.68
+P0224,GigaZ200 882,Crafting,989.37
+P0225,GamerFit 760,Kitchenware,792.47
+P0226,ZenithWave 405,Software,39.73
+P0227,HydroCast 101,Storage,265.72
+P0228,GammaPro 890,Health & Wellness,395.15
+P0229,GamerZ200 773,Crafting,118.77
+P0230,ZenithSpeed 596,Kitchenware,498.1
+P0231,TerraDrill 144,Comfort,421.07
+P0232,FlexiCore 117,Home Appliances,334.51
+P0233,CosmoGuard 653,Stationery,1368.83
+P0234,SilentX1 765,Tools,658.95
+P0235,CosmoMaster 612,Kitchenware,380.52
+P0236,TerraGlow 353,Garden,240.96
+P0237,OmegaStream 784,Software,1414.02
+P0238,ZetaSpeed 279,Office Supplies,71.94
+P0239,DataGuard 479,Crafting,958.33
+P0240,CulinaryCore 295,Travel,793.5
+P0241,AlphaMax 842,Decor,1466.52
+P0242,HydroMax 535,Storage,1117.44
+P0243,OrionCast 148,Stationery,254.87
+P0244,OmegaCore 878,Home Appliances,948.19
+P0245,AuraFit 561,Home Automation,1462.53
+P0246,NovaGlow 336,Pet Supplies,828.36
+P0247,QuantumWave 361,Travel,1471.94
+P0248,QuantumGuard 213,Audio,603.93
+P0249,EcoGrip 360,Bedding,396.33
+P0250,RoboGlow 599,Outdoor,35.79
+P0251,RoboGlow 741,Travel,874.68
+P0252,OrionByte 962,Home Appliances,215.84
+P0253,OrionFlare 290,Outdoor,167.65
+P0254,GammaSeries 9 215,Accessories,1434.88
+P0255,SolarPrint 611,Eyewear,1411.87
+P0256,DeltaDesk 215,Stationery,1087.84
+P0257,ZenithGrip 350,Lifestyle,655.65
+P0258,SilentSeries 9 624,Tools,333.48
+P0259,AlphaFlare 830,Electronics,1069.42
+P0260,DeltaMaster 547,Health & Wellness,448.87
+P0261,SilentBeam 819,Security,948.6
+P0262,RoboStream 252,Kitchenware,1086.01
+P0263,DeltaGuard 633,Decor,97.94
+P0264,GammaMate 976,Health & Wellness,102.84
+P0265,ZenithDesk 887,Storage,1145.31
+P0266,EpsilonGlow 168,Lifestyle,981.11
+P0267,DeltaGlow 703,Art Supplies,178.49
+P0268,GamerSeries 9 499,Security,134.44
+P0269,VisionVac 628,Wearables,1309.06
+P0270,SilentGuard 690,Tools,1076.85
+P0271,GamerFlare 576,Crafting,695.75
+P0272,EcoPrint 273,Software,169.27
+P0273,AuraByte 817,Kitchenware,50.73
+P0274,OmegaSeries 9 700,Wearables,517.47
+P0275,GigaPlus 555,Wearables,993.8
+P0276,DataBeam 735,Office Supplies,1292.12
+P0277,AuraX1 533,Health & Wellness,651.75
+P0278,AuraStream 604,Storage,85.44
+P0279,NovaByte 201,Home Goods,881.07
+P0280,NovaGlow 127,Tools,1017.94
+P0281,AuraCast 720,Office Supplies,822.54
+P0282,SolarSeries 9 708,Tools,533.99
+P0283,AlphaSafe 516,Groceries,465.8
+P0284,DataSeries 9 180,Storage,947.64
+P0285,DeltaCast 987,Audio,729.76
+P0286,VisionCast 407,Audio,763.41
+P0287,CosmoStream 297,Home Appliances,500.91
+P0288,PowerGrip 550,Electronics,518.5
+P0289,GammaX1 743,Garden,272.86
+P0290,EcoX1 915,Travel,1120.83
+P0291,QuantumSeries 9 179,Tools,1052.01
+P0292,SilentGrip 203,Sports & Outdoors,999.9
+P0293,OmegaVac 822,Electronics,1463.13
+P0294,NovaMini 998,Stationery,469.4
+P0295,HydroPure 717,Decor,300.09
+P0296,DeltaSpeed 201,Audio,336.1
+P0297,VisionGuard 498,Lifestyle,310.68
+P0298,HydroSafe 729,Office Furniture,1221.23
+P0299,FlexiStream 332,Comfort,433.94
+P0300,OrionGuard 105,Office Furniture,1166.39
+P0301,VisionSpeed 610,Health & Wellness,111.18
+P0302,SolarFit 748,Decor,122.43
+P0303,FlexiPure 277,Automotive,813.12
+P0304,SolarMaster 700,Decor,687.08
+P0305,ZetaPro 441,Audio,76.23
+P0306,ChronoDrill 389,Garden,1475.57
+P0307,ZenithGuard 972,Office Supplies,245.36
+P0308,BetaSafe 608,Sports & Outdoors,492.69
+P0309,OmegaFlare 509,Bedding,1166.77
+P0310,VisionSpeed 321,Software,674.79
+P0311,SolarPlus 593,Home Automation,326.69
+P0312,ChronoPro 233,Outdoor,537.82
+P0313,AuraWave 150,Garden,220.92
+P0314,FlexiWave 782,Travel,841.63
+P0315,VisionStream 754,Groceries,1279.73
+P0316,BetaMini 650,Groceries,914.41
+P0317,AuraStream 288,Automotive,852.38
+P0318,DeltaDrill 472,Outdoor,624.54
+P0319,OmegaStream 165,Pet Supplies,383.37
+P0320,ZetaCast 445,Office Furniture,1394.12
+P0321,EpsilonDesk 445,Automotive,1374.77
+P0322,CosmoCore 950,Garden,1276.58
+P0323,TerraMate 399,Audio,992.81
+P0324,OmegaZ200 627,Wearables,260.98
+P0325,AeroMini 168,Home Automation,973.06
+P0326,OmegaBeam 815,Gaming,776.62
+P0327,FlexiGlow 512,Eyewear,1266.39
+P0328,GigaFlow 616,Sports & Outdoors,509.05
+P0329,QuantumCore 645,Accessories,738.92
+P0330,PowerUltra 301,Home Automation,1447.35
+P0331,SilentPlus 339,Audio,470.56
+P0332,VisionCast 933,Tools,789.0
+P0333,QuantumByte 516,Travel,901.18
+P0334,GamerMax 841,Stationery,646.7
+P0335,AuraCast 205,Travel,330.27
+P0336,RoboSeries 9 707,Home Automation,38.0
+P0337,ChronoSpeed 596,Sports & Outdoors,542.81
+P0338,AeroSafe 548,Health & Wellness,1045.16
+P0339,CosmoGuard 777,Home Automation,438.63
+P0340,GigaGlow 140,Crafting,1157.14
+P0341,SilentStream 877,Storage,933.53
+P0342,OrionPro 190,Storage,1122.46
+P0343,SilentPlus 400,Automotive,1490.76
+P0344,OmegaPro 488,Outdoor,1420.6
+P0345,NovaPrint 405,Electronics,134.54
+P0346,DataKey 540,Accessories,237.48
+P0347,DeltaPrint 715,Art Supplies,1430.02
+P0348,EpsilonPlus 658,Automotive,330.18
+P0349,EpsilonSpeed 188,Stationery,1198.59
+P0350,OmegaCore 368,Stationery,1041.43
+P0351,ZenithSafe 139,Bedding,1297.81
+P0352,ZetaBeam 301,Health & Wellness,1488.71
+P0353,GamerFlow 380,Electronics,166.21
+P0354,DataGrip 834,Stationery,307.13
+P0355,SilentMini 852,Sports & Outdoors,402.53
+P0356,StellarFit 196,Garden,894.79
+P0357,CulinaryZ200 592,Pet Supplies,402.61
+P0358,ChronoFlow 103,Electronics,912.43
+P0359,HydroDrill 808,Home Goods,1060.56
+P0360,NovaSeries 9 955,Sports & Outdoors,868.84
+P0361,OrionDrill 616,Office Furniture,559.34
+P0362,TerraSeries 9 812,Audio,792.14
+P0363,CulinaryFit 981,Health & Wellness,338.22
+P0364,VisionX1 455,Eyewear,757.69
+P0365,OmegaPrint 822,Travel,811.43
+P0366,SilentSeries 9 554,Lifestyle,879.83
+P0367,ChronoGlow 963,Audio,699.41
+P0368,OrionBeam 651,Gaming,1362.6
+P0369,ZetaFit 943,Bedding,385.63
+P0370,GammaUltra 458,Security,975.83
+P0371,CulinarySpeed 281,Eyewear,262.02
+P0372,HydroPlus 923,Decor,160.19
+P0373,GamerMaster 175,Office Supplies,147.34
+P0374,GammaMax 862,Crafting,1439.92
+P0375,EcoGlow 706,Decor,398.36
+P0376,VisionMini 253,Groceries,1462.53
+P0377,VisionPure 594,Groceries,924.7
+P0378,OmegaDesk 209,Audio,767.21
+P0379,ChronoDesk 620,Decor,1072.76
+P0380,AlphaSafe 862,Art Supplies,581.8
+P0381,RoboStream 292,Home Appliances,933.87
+P0382,SilentMate 358,Audio,1022.62
+P0383,OrionKey 732,Wearables,859.57
+P0384,SilentGlow 952,Wearables,179.67
+P0385,GammaSeries 9 960,Health & Wellness,756.5
+P0386,SilentGlow 203,Kitchenware,1320.43
+P0387,DeltaFlare 568,Bedding,1400.11
+P0388,ZenithKey 643,Decor,1012.67
+P0389,BetaMini 236,Health & Wellness,541.48
+P0390,ChronoSpeed 585,Wearables,719.71
+P0391,ZenithPlus 206,Software,618.99
+P0392,SolarX1 191,Garden,216.44
+P0393,AlphaPrint 200,Home Appliances,1005.52
+P0394,AuraSafe 487,Software,429.99
+P0395,AuraBeam 912,Home Goods,569.94
+P0396,BetaStream 788,Home Appliances,183.64
+P0397,OrionX1 615,Groceries,653.03
+P0398,DeltaGrip 519,Travel,1401.16
+P0399,AquaKey 314,Home Automation,744.86
+P0400,DeltaUltra 616,Travel,71.16
+P0401,HydroCore 310,Electronics,1400.57
+P0402,NovaMini 352,Office Supplies,142.67
+P0403,CosmoGuard 530,Office Supplies,1250.97
+P0404,CosmoKey 134,Home Automation,315.68
+P0405,OmegaBeam 556,Crafting,1007.66
+P0406,AquaKey 669,Home Goods,1393.16
+P0407,SolarBeam 915,Automotive,840.33
+P0408,OmegaGuard 225,Home Automation,812.48
+P0409,AeroFlow 832,Lifestyle,297.21
+P0410,NovaBeam 234,Home Automation,866.29
+P0411,ZetaBeam 329,Security,1294.73
+P0412,NovaByte 388,Tools,1488.92
+P0413,GigaPlus 852,Garden,496.85
+P0414,SolarMax 541,Office Supplies,692.17
+P0415,BetaDesk 844,Groceries,1255.19
+P0416,EpsilonX1 695,Garden,1061.58
+P0417,PowerZ200 205,Kitchenware,259.18
+P0418,GammaKey 254,Automotive,972.99
+P0419,OrionZ200 636,Office Furniture,275.98
+P0420,OrionMini 796,Art Supplies,1010.12
+P0421,EcoDesk 269,Stationery,769.96
+P0422,AuraZ200 288,Audio,705.83
+P0423,AeroMate 230,Tools,1372.69
+P0424,OmegaPlus 182,Office Supplies,432.98
+P0425,AlphaGrip 848,Lifestyle,202.87
+P0426,NovaSafe 145,Decor,1182.4
+P0427,StellarGlow 794,Software,685.19
+P0428,SilentFit 139,Kitchenware,221.49
+P0429,DataStream 342,Gaming,1389.15
+P0430,CosmoSpeed 136,Office Supplies,394.66
+P0431,ChronoSpeed 881,Wearables,227.47
+P0432,EcoCast 791,Office Supplies,202.11
+P0433,OmegaPro 358,Home Automation,1054.08
+P0434,PowerPro 561,Wearables,664.46
+P0435,OrionUltra 392,Home Goods,1272.26
+P0436,GammaFlare 907,Bedding,713.4
+P0437,ZetaSpeed 215,Automotive,1002.41
+P0438,SilentSeries 9 766,Garden,750.97
+P0439,CosmoSafe 200,Accessories,572.69
+P0440,AuraByte 676,Gaming,1250.41
+P0441,StellarSpeed 463,Home Appliances,1406.17
+P0442,GamerVac 139,Accessories,125.86
+P0443,RoboMax 777,Decor,534.29
+P0444,CulinaryMaster 147,Home Automation,117.87
+P0445,CulinaryMini 663,Automotive,1035.58
+P0446,GammaSeries 9 227,Home Appliances,661.94
+P0447,ZetaFit 527,Art Supplies,1328.76
+P0448,RoboPure 937,Decor,419.59
+P0449,DataGrip 822,Security,1446.13
+P0450,QuantumSafe 242,Decor,567.85
+P0451,VisionGuard 642,Travel,1154.44
+P0452,GigaGrip 976,Art Supplies,617.85
+P0453,StellarVac 628,Garden,765.44
+P0454,TerraSafe 883,Office Furniture,271.98
+P0455,NovaCore 524,Crafting,522.39
+P0456,DataPlus 232,Gaming,850.24
+P0457,EpsilonBeam 830,Wearables,560.81
+P0458,BetaFlare 970,Travel,955.9
+P0459,ChronoPlus 961,Tools,1029.51
+P0460,DataKey 924,Home Goods,1359.4
+P0461,OrionDesk 386,Tools,817.61
+P0462,GamerFlow 740,Home Goods,5.7
+P0463,GamerSeries 9 852,Office Furniture,628.04
+P0464,EcoVac 860,Software,697.14
+P0465,QuantumPro 346,Art Supplies,1488.08
+P0466,HydroFlare 491,Electronics,1021.0
+P0467,HydroBeam 165,Outdoor,772.15
+P0468,EcoGuard 756,Home Automation,1437.53
+P0469,DeltaPrint 855,Decor,194.28
+P0470,BetaPro 186,Automotive,913.56
+P0471,GamerDrill 634,Audio,1445.2
+P0472,AeroByte 164,Office Furniture,626.22
+P0473,BetaPure 443,Comfort,994.39
+P0474,TerraPro 688,Bedding,289.55
+P0475,ChronoSeries 9 740,Gaming,473.66
+P0476,NovaVac 591,Crafting,727.2
+P0477,SilentBeam 908,Lifestyle,168.26
+P0478,DeltaX1 358,Travel,302.37
+P0479,AeroSafe 399,Audio,1350.34
+P0480,RoboSafe 180,Pet Supplies,1419.12
+P0481,AeroUltra 733,Audio,315.3
+P0482,GamerSeries 9 917,Electronics,1026.1
+P0483,SilentCast 200,Art Supplies,289.1
+P0484,StellarMate 780,Bedding,1018.62
+P0485,SilentWave 577,Outdoor,143.94
+P0486,CulinarySafe 946,Garden,937.03
+P0487,OrionKey 172,Comfort,1246.02
+P0488,ChronoMate 718,Software,1185.62
+P0489,AquaGrip 852,Health & Wellness,702.39
+P0490,CosmoMini 865,Office Supplies,1440.3
+P0491,AeroZ200 452,Office Supplies,559.16
+P0492,GigaMate 260,Travel,124.15
+P0493,GigaFit 927,Office Supplies,1017.15
+P0494,DataSpeed 840,Accessories,664.89
+P0495,EcoPlus 647,Decor,1416.45
+P0496,TerraCore 571,Garden,886.96
+P0497,GigaZ200 951,Kitchenware,1323.22
+P0498,AquaMax 920,Decor,778.63
+P0499,OmegaGrip 331,Sports & Outdoors,1321.08
+P0500,BetaZ200 509,Home Goods,883.53
+P0501,OmegaGuard 109,Accessories,541.79
+P0502,EcoDesk 237,Stationery,918.18
+P0503,RoboPlus 593,Automotive,1282.73
+P0504,CosmoCore 809,Stationery,419.76
+P0505,NovaDesk 363,Wearables,506.7
+P0506,EcoMini 769,Home Appliances,989.68
+P0507,SilentKey 782,Travel,919.41
+P0508,DeltaSpeed 889,Wearables,314.81
+P0509,FlexiByte 494,Crafting,907.84
+P0510,OmegaDesk 541,Travel,550.71
+P0511,FlexiZ200 754,Health & Wellness,866.15
+P0512,EpsilonSpeed 402,Audio,634.2
+P0513,DataGuard 576,Lifestyle,1432.31
+P0514,VisionDrill 929,Groceries,226.77
+P0515,SolarSeries 9 927,Home Goods,1359.46
+P0516,SolarSpeed 931,Wearables,1394.75
+P0517,SilentPro 433,Travel,34.32
+P0518,QuantumMax 619,Bedding,732.65
+P0519,GammaCore 647,Audio,31.23
+P0520,AeroGuard 649,Audio,1266.58
+P0521,OmegaDesk 327,Accessories,251.46
+P0522,AlphaByte 437,Bedding,428.84
+P0523,BetaPlus 876,Gaming,1252.33
+P0524,GamerPrint 623,Comfort,555.08
+P0525,GammaGlow 546,Wearables,1452.67
+P0526,SolarMate 886,Security,1168.97
+P0527,QuantumFit 105,Groceries,240.49
+P0528,AlphaSeries 9 825,Health & Wellness,465.71
+P0529,SolarX1 717,Art Supplies,994.29
+P0530,StellarPure 446,Eyewear,572.17
+P0531,TerraSafe 757,Outdoor,561.67
+P0532,EcoWave 726,Lifestyle,961.76
+P0533,BetaMaster 796,Sports & Outdoors,1385.23
+P0534,SolarFit 852,Accessories,1106.93
+P0535,GammaBeam 123,Travel,1018.89
+P0536,EcoByte 839,Stationery,205.41
+P0537,EpsilonSpeed 588,Office Supplies,786.82
+P0538,OmegaZ200 581,Lifestyle,335.5
+P0539,BetaMax 377,Lifestyle,1087.42
+P0540,GamerByte 213,Art Supplies,594.23
+P0541,TerraByte 665,Home Goods,1071.72
+P0542,ChronoPrint 763,Groceries,1200.64
+P0543,StellarPrint 673,Home Appliances,103.1
+P0544,GigaGuard 566,Storage,1253.84
+P0545,OmegaBeam 148,Security,172.01
+P0546,StellarWave 179,Home Appliances,1165.32
+P0547,AlphaMate 310,Security,1449.18
+P0548,DataPrint 759,Electronics,1475.6
+P0549,OrionDrill 114,Stationery,983.05
+P0550,EcoFit 728,Art Supplies,284.83
+P0551,ZenithPure 901,Home Appliances,866.41
+P0552,TerraFit 664,Comfort,987.44
+P0553,PowerStream 679,Software,1404.99
+P0554,NovaGrip 134,Office Furniture,1145.44
+P0555,CulinaryX1 615,Audio,580.39
+P0556,VisionSafe 474,Lifestyle,889.86
+P0557,SolarStream 466,Lifestyle,399.31
+P0558,AeroZ200 954,Home Goods,56.59
+P0559,OrionZ200 214,Groceries,1307.55
+P0560,SilentPure 649,Decor,437.81
+P0561,VisionCast 369,Automotive,597.62
+P0562,SilentMate 599,Tools,384.07
+P0563,OrionMate 735,Outdoor,276.74
+P0564,HydroPro 411,Comfort,262.82
+P0565,OrionBeam 376,Bedding,685.4
+P0566,EpsilonCore 686,Electronics,832.67
+P0567,OmegaCast 201,Health & Wellness,1007.39
+P0568,GigaPure 331,Eyewear,1233.82
+P0569,AlphaCast 178,Software,1089.08
+P0570,TerraKey 308,Office Supplies,271.84
+P0571,NovaPrint 705,Electronics,969.47
+P0572,HydroStream 106,Outdoor,799.87
+P0573,EcoMate 743,Tools,995.52
+P0574,DataFlow 437,Automotive,328.32
+P0575,OrionPlus 793,Tools,1015.56
+P0576,GigaMini 329,Gaming,165.83
+P0577,AquaUltra 702,Sports & Outdoors,400.57
+P0578,DeltaFlare 113,Automotive,945.23
+P0579,AuraGlow 839,Garden,286.29
+P0580,EpsilonMaster 608,Office Furniture,1138.35
+P0581,RoboSeries 9 371,Art Supplies,145.82
+P0582,RoboDrill 186,Decor,86.16
+P0583,GammaStream 849,Art Supplies,590.62
+P0584,DeltaX1 467,Office Furniture,249.19
+P0585,PowerUltra 846,Travel,43.05
+P0586,FlexiBeam 810,Office Supplies,842.58
+P0587,VisionWave 576,Home Goods,319.22
+P0588,CosmoFlow 121,Health & Wellness,928.45
+P0589,BetaStream 714,Gaming,685.14
+P0590,DataPlus 762,Health & Wellness,1409.69
+P0591,EcoGlow 275,Groceries,310.78
+P0592,ZenithBeam 813,Office Supplies,96.74
+P0593,TerraDrill 556,Audio,105.49
+P0594,GamerByte 322,Office Supplies,1351.11
+P0595,OmegaPrint 621,Gaming,893.56
+P0596,QuantumMax 954,Eyewear,861.42
+P0597,AeroPlus 202,Wearables,986.19
+P0598,OmegaMate 479,Eyewear,44.23
+P0599,StellarSpeed 694,Gaming,216.14
+P0600,DeltaKey 721,Home Goods,1484.35

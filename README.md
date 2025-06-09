@@ -6,7 +6,8 @@
 ## 🚀 功能特性
 
 - **最新 LangChain 0.3**: 使用最新版本的 LangChain，获得更好的性能和功能
-- **多格式文档支持**: PDF, DOCX, TXT, MD, CSV, Excel
+- **🗃️ SQL智能查询**: 基于 `create_sql_agent` 的自然语言数据库查询
+- **📄 多格式文档支持**: PDF, DOCX, TXT, MD, CSV, Excel
 - **智能问答**: 基于检索增强生成 (RAG) 的问答系统
 - **对话记忆**: 支持多轮对话的上下文记忆
 - **LCEL 链式结构**: 使用 LangChain Expression Language 构建清晰的处理链
@@ -24,11 +25,20 @@
 
 ```
 project_root/
-├── data/                        # 文档数据目录
-│   └── Long Liang.pdf          # 示例PDF文档
+├── data/                        # 数据目录
+│   ├── database/               # SQLite数据库文件
+│   │   └── erp.db             # ERP示例数据库
+│   ├── csv/                   # CSV数据文件
+│   │   ├── products_data.csv  # 产品数据
+│   │   ├── inventory_data.csv # 库存数据
+│   │   └── sales_data.csv     # 销售数据
+│   └── document/              # 文档目录
+│       └── Long Liang.pdf     # 示例PDF文档
 ├── src/                        # 源代码目录
 │   ├── config/                 # 配置管理
 │   │   └── settings.py         # 应用设置
+│   ├── agents/                 # 智能代理
+│   │   └── sql_agent.py        # SQL查询代理
 │   ├── document_loaders/       # 文档加载器
 │   │   └── document_loader.py  # 多格式文档加载
 │   ├── vectorstores/          # 向量存储
@@ -45,6 +55,7 @@ project_root/
 │   │   └── main.py             # FastAPI应用
 │   └── main.py                # 主入口文件
 ├── requirements.txt           # 项目依赖
+├── SQL_AGENT_GUIDE.md        # SQL Agent使用指南
 ├── UPGRADE_GUIDE.md          # LangChain 0.3 升级指南
 └── README.md                 # 项目说明
 ```
@@ -108,16 +119,23 @@ python src/main.py build --force-rebuild
 python src/main.py build --use-openai-embeddings
 ```
 
-#### 2. 交互式问答
+#### 2. 智能交互问答
 
 ```bash
-python src/main.py interactive
+python src/main.py chat
 ```
 
-交互式模式支持以下命令：
+支持两种问答模式：
+- **📄 文档问答模式**: 基于向量检索的文档问答
+- **🗃️ SQL查询模式**: 基于自然语言的数据库查询
+
+交互式命令：
 - 输入问题开始对话
-- 输入 `clear` 清空记忆
-- 输入 `quit` 或 `exit` 退出
+- `sql:` 前缀强制进行SQL查询
+- `mode doc` 切换到文档问答模式  
+- `mode sql` 切换到SQL查询模式
+- `clear` 清空当前模式的记忆
+- `quit` 或 `exit` 退出
 
 #### 3. 启动 API 服务
 
@@ -160,7 +178,29 @@ curl -X DELETE "http://localhost:8000/memory/user123"
 curl "http://localhost:8000/memory/sessions"
 ```
 
-#### 4. 向量存储管理
+#### 4. SQL智能查询
+
+```bash
+# SQL自然语言查询
+curl -X POST "http://localhost:8000/sql/query" \
+     -H "Content-Type: application/json" \
+     -d '{
+       "question": "查询销售额最高的产品",
+       "session_id": "user123"
+     }'
+
+# 获取数据库信息
+curl "http://localhost:8000/sql/database/info"
+
+# 获取表样例数据
+curl "http://localhost:8000/sql/tables/products/sample?limit=5"
+
+# SQL记忆管理
+curl "http://localhost:8000/sql/memory/user123/stats"
+curl -X DELETE "http://localhost:8000/sql/memory/user123"
+```
+
+#### 5. 向量存储管理
 
 ```bash
 # 重建向量存储

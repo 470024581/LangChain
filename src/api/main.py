@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from langserve import add_routes
 
 from ..chains.qa_chain import DocumentQAChain, ConversationalRetrievalChain
+from ..agents.sql_agent import SQLAgent
 from ..vectorstores.vector_store import VectorStoreManager
 from ..memory.conversation_memory import SessionManager
 from ..config.settings import settings
@@ -25,13 +26,14 @@ logger = logging.getLogger(__name__)
 vector_store_manager: Optional[VectorStoreManager] = None
 qa_chain: Optional[DocumentQAChain] = None
 conversational_chain: Optional[ConversationalRetrievalChain] = None
+sql_agent: Optional[SQLAgent] = None
 session_manager: SessionManager = SessionManager()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    global vector_store_manager, qa_chain, conversational_chain
+    global vector_store_manager, qa_chain, conversational_chain, sql_agent
     
     logger.info("初始化应用...")
     
@@ -50,6 +52,14 @@ async def lifespan(app: FastAPI):
         conversational_chain = ConversationalRetrievalChain(
             vector_store_manager=vector_store_manager
         )
+        
+        # 初始化SQL Agent
+        try:
+            sql_agent = SQLAgent(use_memory=True, verbose=False)
+            logger.info("SQL Agent初始化完成")
+        except Exception as e:
+            logger.warning(f"SQL Agent初始化失败: {str(e)}")
+            sql_agent = None
         
         # 添加LangServe路由
         add_routes(
@@ -125,6 +135,22 @@ class MemoryStatsResponse(BaseModel):
     memory_type: str
 
 
+class SQLQueryRequest(BaseModel):
+    """SQL查询请求模型"""
+    question: str = Field(..., description="自然语言问题")
+    session_id: str = Field("default", description="会话ID")
+
+
+class SQLQueryResponse(BaseModel):
+    """SQL查询响应模型"""
+    answer: str = Field(..., description="查询结果")
+    question: str = Field(..., description="原始问题")
+    session_id: str = Field(..., description="会话ID")
+    success: bool = Field(..., description="查询是否成功")
+    intermediate_steps: list = Field(default_factory=list, description="中间步骤")
+    error: Optional[str] = Field(None, description="错误信息")
+
+
 def get_qa_chain() -> DocumentQAChain:
     """获取问答链实例"""
     if qa_chain is None:
@@ -146,6 +172,13 @@ def get_vector_store_manager() -> VectorStoreManager:
     return vector_store_manager
 
 
+def get_sql_agent() -> SQLAgent:
+    """获取SQL Agent实例"""
+    if sql_agent is None:
+        raise HTTPException(status_code=500, detail="SQL Agent未初始化")
+    return sql_agent
+
+
 # API路由
 @app.get("/")
 async def root():
@@ -160,12 +193,14 @@ async def health_check():
         # 检查各组件状态
         qa_status = qa_chain is not None
         vector_status = vector_store_manager is not None and vector_store_manager.vector_store is not None
+        sql_status = sql_agent is not None
         langsmith_status = langsmith_manager.is_enabled
         
         return {
             "status": "healthy" if qa_status and vector_status else "unhealthy",
             "qa_chain": "ready" if qa_status else "not ready",
             "vector_store": "ready" if vector_status else "not ready",
+            "sql_agent": "ready" if sql_status else "not ready",
             "langsmith": "enabled" if langsmith_status else "disabled"
         }
     except Exception as e:
@@ -589,6 +624,103 @@ async def get_evaluation_summary():
     except Exception as e:
         logger.error(f"获取评估汇总失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取汇总失败: {str(e)}")
+
+
+# ===============================
+# SQL Agent相关端点
+# ===============================
+
+@app.post("/sql/query", response_model=SQLQueryResponse)
+async def sql_query(
+    request: SQLQueryRequest,
+    agent: SQLAgent = Depends(get_sql_agent)
+):
+    """执行SQL查询"""
+    try:
+        logger.info(f"收到SQL查询请求: {request.question[:100]}...")
+        
+        result = agent.query(
+            question=request.question,
+            session_id=request.session_id
+        )
+        
+        return SQLQueryResponse(**result)
+        
+    except Exception as e:
+        logger.error(f"SQL查询失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"SQL查询失败: {str(e)}")
+
+
+@app.get("/sql/database/info")
+async def get_database_info(
+    agent: SQLAgent = Depends(get_sql_agent)
+):
+    """获取数据库信息"""
+    try:
+        info = agent.get_database_info()
+        return {
+            "status": "success",
+            "database_info": info
+        }
+        
+    except Exception as e:
+        logger.error(f"获取数据库信息失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取数据库信息失败: {str(e)}")
+
+
+@app.get("/sql/tables/{table_name}/sample")
+async def get_table_sample(
+    table_name: str,
+    limit: int = 5,
+    agent: SQLAgent = Depends(get_sql_agent)
+):
+    """获取表的样例数据"""
+    try:
+        sample = agent.get_sample_data(table_name, limit)
+        return {
+            "status": "success",
+            "sample_data": sample
+        }
+        
+    except Exception as e:
+        logger.error(f"获取表样例数据失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取表样例数据失败: {str(e)}")
+
+
+@app.delete("/sql/memory/{session_id}")
+async def clear_sql_memory(
+    session_id: str,
+    agent: SQLAgent = Depends(get_sql_agent)
+):
+    """清除SQL会话记忆"""
+    try:
+        success = agent.clear_memory(session_id)
+        return {
+            "status": "success" if success else "failed",
+            "message": f"会话 {session_id} 记忆已清除" if success else f"清除会话 {session_id} 记忆失败"
+        }
+        
+    except Exception as e:
+        logger.error(f"清除SQL记忆失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"清除记忆失败: {str(e)}")
+
+
+@app.get("/sql/memory/{session_id}/stats")
+async def get_sql_memory_stats(
+    session_id: str,
+    agent: SQLAgent = Depends(get_sql_agent)
+):
+    """获取SQL会话记忆统计"""
+    try:
+        stats = agent.get_memory_stats(session_id)
+        return {
+            "status": "success",
+            "memory_stats": stats
+        }
+        
+    except Exception as e:
+        logger.error(f"获取SQL记忆统计失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取记忆统计失败: {str(e)}")
 
 
 if __name__ == "__main__":

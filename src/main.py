@@ -39,68 +39,7 @@ def build_vector_store(force_rebuild: bool = False, use_openai: bool = False):
         raise
 
 
-def interactive_qa():
-    """交互式问答模式"""
-    logger.info("启动交互式问答模式...")
-    
-    try:
-        # 初始化向量存储
-        vector_manager = VectorStoreManager(use_openai_embeddings=False)
-        vector_manager.get_or_create_vector_store()
-        
-        # 初始化问答链
-        qa_chain = DocumentQAChain(
-            vector_store_manager=vector_manager,
-            use_memory=True
-        )
-        
-        print("\n=== 文档问答系统 ===")
-        print("输入问题开始对话，输入 'quit' 或 'exit' 退出")
-        print("输入 'clear' 清空记忆")
-        print("=" * 50)
-        
-        session_id = "interactive"
-        
-        while True:
-            try:
-                question = input("\n问题: ").strip()
-                
-                if question.lower() in ['quit', 'exit', '退出']:
-                    print("再见！")
-                    break
-                
-                if question.lower() in ['clear', '清空']:
-                    qa_chain.clear_memory(session_id)
-                    print("记忆已清空")
-                    continue
-                
-                if not question:
-                    continue
-                
-                print("正在思考...")
-                result = qa_chain.invoke(question, session_id)
-                
-                print(f"\n答案: {result['answer']}")
-                
-                # 显示相关文档
-                if result.get('relevant_documents'):
-                    print(f"\n相关文档({len(result['relevant_documents'])}个):")
-                    for i, doc in enumerate(result['relevant_documents'][:2], 1):
-                        source = doc['metadata'].get('source_file', 'Unknown')
-                        content = doc['content'][:200] + "..." if len(doc['content']) > 200 else doc['content']
-                        print(f"  {i}. 来源: {source}")
-                        print(f"     内容: {content}")
-                
-            except KeyboardInterrupt:
-                print("\n\n程序被中断，再见！")
-                break
-            except Exception as e:
-                logger.error(f"处理问题时出错: {str(e)}")
-                print(f"错误: {str(e)}")
-                
-    except Exception as e:
-        logger.error(f"初始化失败: {str(e)}")
-        print(f"初始化失败: {str(e)}")
+
 
 
 def start_api_server():
@@ -428,67 +367,130 @@ def handle_chat_command(args):
     try:
         from src.vectorstores.vector_store import VectorStoreManager
         from src.chains.qa_chain import DocumentQAChain, ConversationalRetrievalChain
+        from src.agents.sql_agent import SQLAgent
         
         # 初始化向量存储
         vector_manager = VectorStoreManager(use_openai_embeddings=False)
         vector_manager.get_or_create_vector_store()
         
-        # 选择使用的链
+        # 初始化问答链
         if args.conversational:
-            chain = ConversationalRetrievalChain(vector_store_manager=vector_manager)
+            qa_chain = ConversationalRetrievalChain(vector_store_manager=vector_manager)
             print("使用对话式检索链")
         else:
             use_memory = not args.no_memory
-            chain = DocumentQAChain(
+            qa_chain = DocumentQAChain(
                 vector_store_manager=vector_manager,
                 model_name=args.model,
                 use_memory=use_memory
             )
             print(f"使用标准问答链，记忆功能: {'开启' if use_memory else '关闭'}")
         
-        print("\n=== 文档问答系统 ===")
+        # 初始化SQL Agent
+        try:
+            sql_agent = SQLAgent(use_memory=True, verbose=False)
+            sql_available = True
+            print("SQL Agent 初始化成功")
+        except Exception as e:
+            sql_agent = None
+            sql_available = False
+            print(f"SQL Agent 初始化失败: {str(e)}")
+        
+        print("\n=== 智能问答系统 ===")
+        print("📄 文档问答 | 🗃️ SQL查询")
         print("输入问题开始对话，输入 'quit' 或 'exit' 退出")
         print("输入 'clear' 清空记忆")
+        print("输入 'sql:' 前缀进行SQL查询")
+        print("输入 'mode doc' 切换到文档问答模式")
+        print("输入 'mode sql' 切换到SQL查询模式")
         print("=" * 50)
         
         session_id = args.session
+        current_mode = "doc"  # 默认文档模式
+        print(f"当前模式: {'📄 文档问答' if current_mode == 'doc' else '🗃️ SQL查询'}")
         
         while True:
             try:
-                question = input("\n问题: ").strip()
+                mode_indicator = "📄" if current_mode == "doc" else "🗃️"
+                question = input(f"\n{mode_indicator} 问题: ").strip()
                 
                 if question.lower() in ['quit', 'exit', '退出']:
                     print("再见！")
                     break
                 
                 if question.lower() in ['clear', '清空']:
-                    if hasattr(chain, 'clear_memory'):
-                        chain.clear_memory(session_id)
-                        print("记忆已清空")
+                    if current_mode == "doc":
+                        if hasattr(qa_chain, 'clear_memory'):
+                            qa_chain.clear_memory(session_id)
+                        elif hasattr(qa_chain, 'memory_manager'):
+                            qa_chain.memory_manager.clear_memory(session_id)
+                    elif current_mode == "sql" and sql_available:
+                        sql_agent.clear_memory(session_id)
+                    print("记忆已清空")
+                    continue
+                
+                if question.lower() == 'mode doc':
+                    current_mode = "doc"
+                    print("已切换到文档问答模式 📄")
+                    continue
+                
+                if question.lower() == 'mode sql':
+                    if sql_available:
+                        current_mode = "sql"
+                        print("已切换到SQL查询模式 🗃️")
                     else:
-                        print("当前链不支持记忆功能")
+                        print("SQL Agent不可用")
                     continue
                 
                 if not question:
                     continue
                 
-                print("正在思考...")
+                # 处理SQL查询（无论当前模式）
+                if question.lower().startswith('sql:'):
+                    if not sql_available:
+                        print("SQL Agent不可用")
+                        continue
+                    
+                    sql_question = question[4:].strip()
+                    print("🗃️ SQL查询中...")
+                    result = sql_agent.query(sql_question, session_id=session_id)
+                    
+                    print(f"\n答案: {result['answer']}")
+                    if not result['success'] and result.get('error'):
+                        print(f"错误: {result['error']}")
+                    continue
                 
-                if args.conversational:
-                    result = chain.invoke(question=question, session_id=session_id)
-                else:
-                    result = chain.invoke(question, session_id)
+                # 根据当前模式处理查询
+                if current_mode == "doc":
+                    print("📄 文档检索中...")
+                    
+                    if args.conversational:
+                        result = qa_chain.invoke(question=question, session_id=session_id)
+                    else:
+                        result = qa_chain.invoke(question, session_id)
+                    
+                    print(f"\n答案: {result['answer']}")
+                    
+                    # 显示相关文档
+                    if result.get('relevant_documents'):
+                        print(f"\n相关文档({len(result['relevant_documents'])}个):")
+                        for i, doc in enumerate(result['relevant_documents'][:2], 1):
+                            source = doc['metadata'].get('source_file', 'Unknown')
+                            content = doc['content'][:200] + "..." if len(doc['content']) > 200 else doc['content']
+                            print(f"  {i}. 来源: {source}")
+                            print(f"     内容: {content}")
                 
-                print(f"\n答案: {result['answer']}")
-                
-                # 显示相关文档
-                if result.get('relevant_documents'):
-                    print(f"\n相关文档({len(result['relevant_documents'])}个):")
-                    for i, doc in enumerate(result['relevant_documents'][:2], 1):
-                        source = doc['metadata'].get('source_file', 'Unknown')
-                        content = doc['content'][:200] + "..." if len(doc['content']) > 200 else doc['content']
-                        print(f"  {i}. 来源: {source}")
-                        print(f"     内容: {content}")
+                elif current_mode == "sql":
+                    if not sql_available:
+                        print("SQL Agent不可用，请切换到文档模式")
+                        continue
+                    
+                    print("🗃️ SQL查询中...")
+                    result = sql_agent.query(question, session_id=session_id)
+                    
+                    print(f"\n答案: {result['answer']}")
+                    if not result['success'] and result.get('error'):
+                        print(f"错误: {result['error']}")
                 
             except KeyboardInterrupt:
                 print("\n\n程序被中断，再见！")
