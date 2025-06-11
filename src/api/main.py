@@ -282,27 +282,17 @@ async def ask_question(
         raise HTTPException(status_code=500, detail=f"处理问题失败: {str(e)}")
 
 
-@app.get("/documents/{question}")
+@app.get("/documents/{question}", response_model=List[Dict])
 async def get_relevant_documents(
-    question: str,
-    k: int = 4,
+    question: str, 
+    k: int = 4, 
     vector_manager: VectorStoreManager = Depends(get_vector_store_manager)
 ):
-    """获取相关文档"""
+    """根据问题获取相关文档"""
     try:
         retriever = vector_manager.get_retriever(k=k)
-        documents = retriever.get_relevant_documents(question)
-        
-        return {
-            "question": question,
-            "documents": [
-                {
-                    "content": doc.page_content,
-                    "metadata": doc.metadata
-                }
-                for doc in documents
-            ]
-        }
+        documents = await retriever.ainvoke(question)
+        return [doc.dict() for doc in documents]
     except Exception as e:
         logger.error(f"获取相关文档失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取相关文档失败: {str(e)}")

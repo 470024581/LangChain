@@ -1,106 +1,76 @@
-# 文档问答系统
+# LangChain RAG & SQL Agent
 
+一个基于 LangChain 构建的高级 RAG (Retrieval-Augmented Generation) 和 SQL Agent 系统。它不仅支持对多种格式的文档进行智能问答，还能通过自然语言与 SQL 数据库进行交互。
 
-基于 LangChain 0.3 构建的智能文档问答系统，支持多种文档格式、上下文记忆、LCEL 链式结构，并提供 Web API 服务。
+最新版本集成了对 **本地大语言模型 (通过 Ollama)** 的支持，允许在 OpenRouter 云端模型和本地模型之间灵活切换。
 
 ## 🚀 功能特性
 
-- **最新 LangChain 0.3**: 使用最新版本的 LangChain，获得更好的性能和功能
-- **🗃️ SQL智能查询**: 基于 `create_sql_agent` 的自然语言数据库查询
-- **📄 多格式文档支持**: PDF, DOCX, TXT, MD, CSV, Excel
-- **智能问答**: 基于检索增强生成 (RAG) 的问答系统
-- **对话记忆**: 支持多轮对话的上下文记忆
-- **LCEL 链式结构**: 使用 LangChain Expression Language 构建清晰的处理链
-- **向量存储**: FAISS 向量数据库存储和检索
-- **Web API**: 基于 FastAPI 和 LangServe 的 API 服务
-- **多种部署模式**: 命令行、交互式、API 服务
-
-## 📋 版本要求
-
-- Python 3.8+
-- LangChain 0.3.7+
-- 其他依赖请参考 `requirements.txt`
-
-## 📁 项目结构
-
-```
-project_root/
-├── data/                        # 数据目录
-│   ├── database/               # SQLite数据库文件
-│   │   └── erp.db             # ERP示例数据库
-│   ├── csv/                   # CSV数据文件
-│   │   ├── products_data.csv  # 产品数据
-│   │   ├── inventory_data.csv # 库存数据
-│   │   └── sales_data.csv     # 销售数据
-│   └── document/              # 文档目录
-│       └── Long Liang.pdf     # 示例PDF文档
-├── src/                        # 源代码目录
-│   ├── config/                 # 配置管理
-│   │   └── settings.py         # 应用设置
-│   ├── agents/                 # 智能代理
-│   │   └── sql_agent.py        # SQL查询代理
-│   ├── document_loaders/       # 文档加载器
-│   │   └── document_loader.py  # 多格式文档加载
-│   ├── vectorstores/          # 向量存储
-│   │   └── vector_store.py     # FAISS向量存储管理
-│   ├── models/                 # 模型管理
-│   │   └── llm_factory.py      # LLM工厂和管理器
-│   ├── prompts/               # 提示词模板
-│   │   └── prompt_templates.py # 各种场景的提示词
-│   ├── memory/                # 记忆管理
-│   │   └── conversation_memory.py # 对话记忆管理
-│   ├── chains/                # 链式处理
-│   │   └── qa_chain.py         # 问答链实现
-│   ├── api/                   # API服务
-│   │   └── main.py             # FastAPI应用
-│   └── main.py                # 主入口文件
-├── requirements.txt           # 项目依赖
-├── SQL_AGENT_GUIDE.md        # SQL Agent使用指南
-├── UPGRADE_GUIDE.md          # LangChain 0.3 升级指南
-└── README.md                 # 项目说明
-```
+- **最新 LangChain 版本**: 基于 LangChain `0.3+` 构建，性能更优。
+- **🤖 双模智能**:
+    - **RAG 问答**: 对 PDF, DOCX, TXT, MD, CSV, Excel 等多种格式文档进行智能检索和问答。
+    - **SQL Agent**: 通过自然语言与 SQL 数据库进行交互、查询和分析。
+- ** flexible LLM 支持**:
+    - **☁️ 云端模型**: 默认通过 OpenRouter 支持多种主流模型 (GPT, Claude, Llama)。
+    - **💻 本地模型**: 支持通过 **Ollama** 部署和使用本地模型 (如 Mistral, Llama 3)。
+- **对话记忆**: 支持多轮对话的上下文记忆。
+- **LCEL 链式结构**: 使用 LangChain Expression Language (LCEL) 构建清晰、可扩展的处理流程。
+- **向量存储**: 使用 FAISS 进行高效的向量存储和检索。
+- **Web API**: 基于 FastAPI 和 LangServe 提供完整的 API 服务。
+- **多种部署模式**: 支持命令行、交互式会话和 API 服务三种模式。
 
 ## 🛠 安装和配置
 
 ### 1. 安装依赖
 
 ```bash
+# 安装核心依赖
 pip install -r requirements.txt
+
+# 如果您计划使用Ollama本地模型，请额外安装Ollama的依赖
+pip install langchain-ollama
 ```
 
 ### 2. 环境配置
 
-创建 `.env` 文件并配置必要的环境变量：
+创建 `.env` 文件并根据您的需求配置环境变量。
 
-```bash
-# OpenRouter API配置
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-OPENROUTER_API_BASE=https://openrouter.ai/api/v1
+#### 配置1: 使用 OpenRouter 云端模型 (默认)
 
-# 默认模型配置
-DEFAULT_MODEL=gpt-4o-mini
+这是最简单的开箱即用配置，使用 OpenRouter 提供的云端大语言模型。
 
-# 向量数据库配置
-VECTOR_STORE_PATH=./vector_store
+```env
+# 1. 设置LLM提供商为 "openrouter"
+LLM_PROVIDER="openrouter"
 
-# API服务配置
-API_HOST=0.0.0.0
-API_PORT=8000
+# 2. 提供您的OpenRouter API密钥
+OPENROUTER_API_KEY="sk-or-v1-..."
 
-# 文档处理配置
-CHUNK_SIZE=1000
-CHUNK_OVERLAP=200
+# 3. [可选] 指定默认模型
+DEFAULT_MODEL="gpt-4o-mini"
 ```
 
-### 3. 准备文档
+#### 配置2: 使用 Ollama 本地模型
 
-将需要问答的文档放入 `data/` 目录，支持以下格式：
-- PDF (.pdf)
-- Word 文档 (.docx, .doc)
-- 文本文件 (.txt)
-- Markdown (.md)
-- CSV (.csv)
-- Excel (.xlsx, .xls)
+如果您在本地通过 Ollama 部署了模型（如 Mistral, Llama 3），可以使用此配置。
+
+**前提**: 请确保您已安装并运行了 [Ollama](https://ollama.com/)。
+
+```env
+# 1. 设置LLM提供商为 "ollama"
+LLM_PROVIDER="ollama"
+
+# 2. [可选] Ollama服务的URL，如果不是默认的 http://localhost:11434
+# OLLAMA_BASE_URL="http://localhost:11434"
+
+# 3. [可选] 要使用的Ollama模型名称，必须是您本地已有的模型
+# OLLAMA_MODEL="mistral"
+```
+
+### 3. 准备数据
+
+- **文档**: 将需要进行问答的文档放入 `data/document/` 目录。
+- **数据库**: 系统自带一个位于 `data/database/erp.db` 的示例 SQLite 数据库。
 
 ## 🎯 使用方法
 
@@ -108,34 +78,34 @@ CHUNK_OVERLAP=200
 
 #### 1. 构建向量存储
 
+在首次运行或文档更新后，您需要构建或更新向量存储。
+
 ```bash
-# 使用 HuggingFace embeddings（推荐，免费）
+# 为 `data/document/` 下的文档构建向量存储
 python src/main.py build
 
 # 强制重建向量存储
 python src/main.py build --force-rebuild
-
-# 使用 OpenAI embeddings（需要API密钥）
-python src/main.py build --use-openai-embeddings
 ```
 
-#### 2. 智能交互问答
+#### 2. 交互式对话
+
+启动交互式命令行界面。
 
 ```bash
 python src/main.py chat
 ```
 
-支持两种问答模式：
-- **📄 文档问答模式**: 基于向量检索的文档问答
-- **🗃️ SQL查询模式**: 基于自然语言的数据库查询
+系统启动后，您可以直接提问。它支持两种模式：
 
-交互式命令：
-- 输入问题开始对话
-- `sql:` 前缀强制进行SQL查询
-- `mode doc` 切换到文档问答模式  
-- `mode sql` 切换到SQL查询模式
-- `clear` 清空当前模式的记忆
-- `quit` 或 `exit` 退出
+- **📄 文档问答模式 (doc)**: 默认模式，基于 RAG 回答您关于文档的问题。
+- **🗃️ SQL查询模式 (sql)**: 基于自然语言与数据库进行交互。
+
+**交互式命令**:
+- `mode doc`: 切换到文档问答模式。
+- `mode sql`: 切换到SQL查询模式。
+- `clear`: 清空当前模式的对话记忆。
+- `quit` 或 `exit`: 退出程序。
 
 #### 3. 启动 API 服务
 
@@ -143,154 +113,39 @@ python src/main.py chat
 python src/main.py server
 ```
 
-服务将在 `http://localhost:8000` 启动。
+服务将在 `http://localhost:8000` 启动，并提供完整的 API 文档 (Swagger UI)。
 
 ### 方式二：API 调用
 
-#### 1. 问答接口
-
-```bash
-curl -X POST "http://localhost:8000/ask" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "question": "文档的主要内容是什么？",
-       "session_id": "user123",
-       "use_conversational": false
-     }'
-```
-
-#### 2. 获取相关文档
-
-```bash
-curl "http://localhost:8000/documents/文档主要内容?k=3"
-```
-
-#### 3. 记忆管理
-
-```bash
-# 获取记忆统计
-curl "http://localhost:8000/memory/user123/stats"
-
-# 清空记忆
-curl -X DELETE "http://localhost:8000/memory/user123"
-
-# 获取所有会话
-curl "http://localhost:8000/memory/sessions"
-```
-
-#### 4. SQL智能查询
-
-```bash
-# SQL自然语言查询
-curl -X POST "http://localhost:8000/sql/query" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "question": "查询销售额最高的产品",
-       "session_id": "user123"
-     }'
-
-# 获取数据库信息
-curl "http://localhost:8000/sql/database/info"
-
-# 获取表样例数据
-curl "http://localhost:8000/sql/tables/products/sample?limit=5"
-
-# SQL记忆管理
-curl "http://localhost:8000/sql/memory/user123/stats"
-curl -X DELETE "http://localhost:8000/sql/memory/user123"
-```
-
-#### 5. 向量存储管理
-
-```bash
-# 重建向量存储
-curl -X POST "http://localhost:8000/vector_store/rebuild?force=true"
-```
-
-### 方式三：LangServe 接口
-
-系统还提供了 LangServe 标准接口：
-
-```bash
-# 标准问答链
-curl -X POST "http://localhost:8000/langserve/qa/invoke" \
-     -H "Content-Type: application/json" \
-     -d '{"input": "你的问题"}'
-
-# 对话式检索链
-curl -X POST "http://localhost:8000/langserve/conversational/invoke" \
-     -H "Content-Type: application/json" \
-     -d '{"input": "你的问题"}'
-```
+(API 端口和功能保持不变，此处省略，详情可查看服务启动后的 `/docs` 路径)
 
 ## 🔧 配置说明
 
 ### 环境变量
 
 | 变量名 | 说明 | 默认值 |
-|--------|------|--------|
-| `OPENROUTER_API_KEY` | OpenRouter API 密钥 | 必填 |
-| `OPENROUTER_API_BASE` | OpenRouter API 基础URL | `https://openrouter.ai/api/v1` |
-| `DEFAULT_MODEL` | 默认使用的模型 | `gpt-4o-mini` |
+|---|---|---|
+| `LLM_PROVIDER` | LLM提供商，`openrouter` 或 `ollama` | `openrouter` |
+| `OPENROUTER_API_KEY` | **(OpenRouter模式下必填)** OpenRouter API密钥 | `""` |
+| `DEFAULT_MODEL` | **(OpenRouter模式下)** 默认使用的模型 | `gpt-4o-mini` |
+| `OLLAMA_BASE_URL` | **(Ollama模式下)** Ollama服务URL | `http://localhost:11434` |
+| `OLLAMA_MODEL` | **(Ollama模式下)** 使用的Ollama模型 | `mistral` |
 | `VECTOR_STORE_PATH` | 向量存储路径 | `./vector_store` |
 | `API_HOST` | API服务主机 | `0.0.0.0` |
 | `API_PORT` | API服务端口 | `8000` |
 | `CHUNK_SIZE` | 文档分块大小 | `1000` |
 | `CHUNK_OVERLAP` | 分块重叠大小 | `200` |
 
-### 支持的模型
-
-系统通过 OpenRouter 支持多种模型：
-
-- **OpenAI**: gpt-4o-mini, gpt-4o, gpt-4-turbo
-- **Anthropic**: claude-3-sonnet, claude-3-haiku
-- **Meta**: llama-3.1-8b, llama-3.1-70b
-
 ## 🧠 技术架构
 
-### 核心组件
+项目采用模块化设计，核心组件包括：
 
-1. **文档加载器** (`DocumentLoaderManager`)
-   - 支持多种文档格式
-   - 自动文档分块和元数据管理
-
-2. **向量存储** (`VectorStoreManager`)
-   - FAISS 向量数据库
-   - 支持 OpenAI 和 HuggingFace embeddings
-   - 持久化存储和检索
-
-3. **LLM 管理** (`LLMFactory`)
-   - OpenRouter 接口集成
-   - 模型切换和重试机制
-
-4. **提示词管理** (`PromptTemplateManager`)
-   - 多种场景的提示词模板
-   - 对话历史格式化
-
-5. **记忆管理** (`ConversationMemoryManager`)
-   - 多会话记忆支持
-   - 窗口和缓冲记忆模式
-
-6. **问答链** (`DocumentQAChain`)
-   - LCEL 构建的处理链
-   - 检索增强生成 (RAG)
-   - 流式输出支持
-
-### LCEL 链结构
-
-```python
-# 标准问答链 (LangChain 0.3 语法)
-chain = (
-    RunnableParallel({
-        "context": retriever | format_docs,
-        "question": RunnablePassthrough(),
-        "chat_history": get_chat_history
-    })
-    | prompt
-    | llm
-    | StrOutputParser()
-)
-```
+- **`LLMFactory`**: 语言模型工厂，根据配置 (`LLM_PROVIDER`) 动态创建和管理来自不同提供商（OpenRouter, Ollama）的 LLM 实例。
+- **`VectorStoreManager`**: 负责文档的加载、切分、向量化，并使用 FAISS 进行存储和管理。
+- **`DocumentQAChain`**: 实现基于 RAG 的标准文档问答链。
+- **`SQLAgent`**: 使用 LangChain 的 `create_sql_agent` 构建，能够理解自然语言并生成、执行 SQL 查询。
+- **`ConversationMemoryManager`**: 管理不同模式、不同会话的对话历史。
+- **FastAPI Application**: 封装核心逻辑，提供 RESTful API 和 LangServe 接口。
 
 ## 🆕 LangChain 0.3 新特性
 

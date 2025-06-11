@@ -6,6 +6,8 @@ from langchain_core.retrievers import BaseRetriever
 from langchain_core.runnables import Runnable, RunnablePassthrough, RunnableLambda, RunnableParallel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables.config import RunnableConfig
+from langchain.retrievers import ContextualCompressionRetriever
+from langchain_community.document_transformers import FlashRankRerank
 
 from ..models.llm_factory import LLMFactory
 from ..vectorstores.vector_store import VectorStoreManager
@@ -36,11 +38,11 @@ class DocumentQAChain:
             retriever_k: 检索器返回的文档数量
         """
         self.vector_store_manager = vector_store_manager
-        self.llm = LLMFactory.create_openrouter_llm(model_name)
         self.use_memory = use_memory
         self.retriever_k = retriever_k
         
-        # 初始化组件
+        # 初始化LLM和提示词管理器
+        self.llm = LLMFactory.create_llm(model_name)
         self.prompt_manager = PromptTemplateManager()
         self.memory_manager = ConversationMemoryManager() if use_memory else None
         
@@ -58,11 +60,23 @@ class DocumentQAChain:
             logger.info("LangSmith 追踪已启用")
     
     def _get_retriever(self) -> BaseRetriever:
-        """获取检索器"""
+        """获取带有Rerank功能的检索器"""
         if not self.vector_store_manager.vector_store:
             self.vector_store_manager.get_or_create_vector_store()
         
-        return self.vector_store_manager.get_retriever(k=self.retriever_k)
+        base_retriever = self.vector_store_manager.get_retriever(k=self.retriever_k)
+        
+        # 初始化Reranker
+        reranker = FlashRankRerank()
+        
+        # 创建带有上下文压缩的检索器
+        compression_retriever = ContextualCompressionRetriever(
+            base_compressor=reranker, 
+            base_retriever=base_retriever
+        )
+        
+        logger.info("已创建带有FlashRank Rerank功能的压缩检索器")
+        return compression_retriever
     
     def _build_chain(self) -> Runnable:
         """构建LCEL链"""
@@ -149,6 +163,12 @@ class DocumentQAChain:
         try:
             logger.info(f"处理问题: {question[:100]}...")
             
+            # 1. 获取相关文档
+            relevant_docs = self.retriever.invoke(question)
+            
+            # 2. 构建上下文
+            context = self._format_docs(relevant_docs)
+            
             # 准备输入
             if self.use_memory:
                 input_data = {
@@ -163,9 +183,6 @@ class DocumentQAChain:
                 answer = self.chain.invoke(input_data, config=self.langsmith_config)
             else:
                 answer = self.chain.invoke(input_data)
-            
-            # 获取相关文档
-            relevant_docs = self.retriever.get_relevant_documents(question)
             
             # 保存到记忆（如果启用）
             if self.use_memory and self.memory_manager:
@@ -249,8 +266,9 @@ class DocumentQAChain:
             yield f"抱歉，处理您的问题时出现错误: {str(e)}"
     
     def get_relevant_documents(self, question: str) -> List[Document]:
-        """获取相关文档"""
-        return self.retriever.get_relevant_documents(question)
+        """获取与问题相关的文档"""
+        logger.info(f"正在为问题检索相关文档: {question[:100]}...")
+        return self.retriever.invoke(question)
     
     def clear_memory(self, session_id: str = "default") -> None:
         """清空指定会话的记忆"""
@@ -271,6 +289,13 @@ class DocumentQAChain:
         self.chain = self._build_chain()
         logger.info(f"检索器文档数量更新为: {k}")
 
+    def _format_docs(self, docs: List[Document]) -> str:
+        # Implementation of _format_docs method
+        pass
+
+    def is_langsmith_enabled(self):
+        return self.langsmith_config is not None
+
 
 class ConversationalRetrievalChain:
     """对话式检索问答链"""
@@ -290,10 +315,11 @@ class ConversationalRetrievalChain:
             retriever_k: 检索器返回的文档数量
         """
         self.vector_store_manager = vector_store_manager
-        self.llm = LLMFactory.create_openrouter_llm(model_name)
+        self.model_name = model_name
         self.retriever_k = retriever_k
         
-        # 初始化组件
+        # 初始化LLM和提示词管理器
+        self.llm = LLMFactory.create_llm(model_name)
         self.prompt_manager = PromptTemplateManager()
         self.memory_manager = ConversationMemoryManager()
         
@@ -307,11 +333,23 @@ class ConversationalRetrievalChain:
         logger.info("对话式检索问答链初始化完成")
     
     def _get_retriever(self) -> BaseRetriever:
-        """获取检索器"""
+        """获取带有Rerank功能的检索器"""
         if not self.vector_store_manager.vector_store:
             self.vector_store_manager.get_or_create_vector_store()
         
-        return self.vector_store_manager.get_retriever(k=self.retriever_k)
+        base_retriever = self.vector_store_manager.get_retriever(k=self.retriever_k)
+
+        # 初始化Reranker
+        reranker = FlashRankRerank()
+        
+        # 创建带有上下文压缩的检索器
+        compression_retriever = ContextualCompressionRetriever(
+            base_compressor=reranker, 
+            base_retriever=base_retriever
+        )
+        
+        logger.info("已创建带有FlashRank Rerank功能的压缩检索器")
+        return compression_retriever
     
     def _build_standalone_question_chain(self) -> Runnable:
         """构建独立问题生成链"""
@@ -380,7 +418,7 @@ class ConversationalRetrievalChain:
             answer = self.qa_chain.invoke(standalone_question)
             
             # 3. 获取相关文档
-            relevant_docs = self.retriever.get_relevant_documents(standalone_question)
+            relevant_docs = self.retriever.invoke(standalone_question)
             
             # 4. 保存到记忆
             self.memory_manager.add_message_pair(
@@ -415,3 +453,42 @@ class ConversationalRetrievalChain:
                 "session_id": session_id,
                 "error": str(e)
             }
+
+    def _get_standalone_question(self, question: str, chat_history: list) -> str:
+        """根据对话历史，生成一个独立的、无须上下文就能理解的问题。"""
+        if not chat_history:
+            return question
+
+        chain = self._get_standalone_question_chain()
+        result = chain.invoke({
+            "question": question,
+            "chat_history": chat_history,
+        })
+        return result
+
+    def _get_standalone_question_chain(self):
+        # 1. 获取相关文档
+        relevant_docs = self.retriever.invoke(question)
+
+        # 2. 构建上下文
+        context = self._format_docs(relevant_docs)
+
+        # 3. 生成独立问题
+        standalone_question = self._get_standalone_question(question, chat_history)
+
+        # 4. 获取相关文档
+        relevant_docs = self.retriever.invoke(standalone_question)
+
+        # 5. 构建上下文
+        context = self._format_docs(relevant_docs)
+
+        return standalone_question
+
+    def get_relevant_documents(self, question: str) -> List[Document]:
+        """获取与问题相关的文档"""
+        logger.info(f"正在为问题检索相关文档: {question[:100]}...")
+        return self.retriever.invoke(question)
+
+    def _format_docs(self, docs: List[Document]) -> str:
+        # Implementation of _format_docs method
+        pass

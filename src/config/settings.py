@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     # 默认模型配置
     default_model: str = Field("gpt-4o-mini", env="DEFAULT_MODEL")
     
+    # LLM提供商 ("openrouter" 或 "ollama")
+    llm_provider: str = Field("openrouter", env="LLM_PROVIDER")
+    
+    # Ollama配置 (如果使用ollama)
+    ollama_base_url: str = Field("http://localhost:11434", env="OLLAMA_BASE_URL")
+    ollama_model: str = Field("mistral", env="OLLAMA_MODEL")
+    
     # LLM参数配置
     openai_temperature: float = Field(0.1, env="OPENAI_TEMPERATURE")
     openai_max_tokens: int = Field(2000, env="OPENAI_MAX_TOKENS")

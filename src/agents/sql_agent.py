@@ -50,7 +50,7 @@ class SQLAgent:
             raise FileNotFoundError(f"数据库文件不存在: {self.db_path}")
         
         # 初始化组件
-        self.llm = LLMFactory.create_openrouter_llm(model_name)
+        self.llm = LLMFactory.create_llm(model_name)
         self.db = self._create_database_connection()
         self.memory_manager = ConversationMemoryManager() if use_memory else None
         
