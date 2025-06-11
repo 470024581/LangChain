@@ -15,52 +15,17 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.vectorstores import VectorStore
 from langchain_core.retrievers import BaseRetriever
 from langchain.retrievers import ContextualCompressionRetriever
-from langchain_community.document_transformers import FlashRankRerank
+from langchain_community.document_compressors import FlashrankRerank
+from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 
 from src.vectorstores.vector_store import VectorStoreManager
 from src.models.llm_factory import LLMFactory
 from src.prompts.prompt_templates import PromptTemplateManager, PromptFormatter
 from src.memory.conversation_memory import ConversationMemoryManager
 from src.utils.langsmith_utils import langsmith_manager, with_langsmith_tracing
+from src.config.settings import settings
 
 logger = logging.getLogger(__name__)
-
-
-class DocumentRetrievalTool:
-    """文档检索工具"""
-    
-    def __init__(self, retriever: BaseRetriever, k: int = 4):
-        self.retriever = retriever
-        self.k = k
-    
-    def retrieve_documents(self, query: str) -> str:
-        """
-        根据查询检索文档，并返回格式化后的字符串
-        
-        Args:
-            query: 查询字符串
-        
-        Returns:
-            格式化后的文档内容
-        """
-        logger.info(f"工具正在检索文档: {query[:100]}...")
-        docs = self.retriever.invoke(query)
-        self._raw_docs = docs  # 缓存原始文档
-        return PromptFormatter.format_documents(docs)
-    
-    def get_raw_documents(self, query: str) -> List[Document]:
-        """
-        获取原始的、未格式化的文档列表
-        
-        Args:
-            query: 查询字符串
-        
-        Returns:
-            Document对象列表
-        """
-        if self._raw_docs:
-            return self._raw_docs
-        return self.retriever.invoke(query)
 
 
 class DocumentQAAgent:
@@ -96,9 +61,8 @@ class DocumentQAAgent:
         self.prompt_manager = PromptTemplateManager()
         self.memory_manager = ConversationMemoryManager() if use_memory else None
         
-        # 初始化检索器和工具
+        # 初始化检索器
         self.retriever = self._get_retriever()
-        self.retrieval_tool = DocumentRetrievalTool(self.retriever, retriever_k)
         
         # 构建Agent
         self.agent_executor = self._build_agent()
@@ -110,13 +74,15 @@ class DocumentQAAgent:
     
     def _get_retriever(self) -> BaseRetriever:
         """获取带有Rerank功能的检索器"""
+        from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
+        
         if not self.vector_store_manager.vector_store:
             self.vector_store_manager.get_or_create_vector_store()
         
         base_retriever = self.vector_store_manager.get_retriever(k=self.retriever_k)
         
-        # 初始化Reranker
-        reranker = FlashRankRerank()
+        # 初始化FlashrankRerank
+        reranker = FlashrankRerank(model=settings.reranker_model, top_n=3)
         
         # 创建带有上下文压缩的检索器
         compression_retriever = ContextualCompressionRetriever(
@@ -124,7 +90,7 @@ class DocumentQAAgent:
             base_retriever=base_retriever
         )
         
-        logger.info("已创建带有FlashRank Rerank功能的压缩检索器")
+        logger.info("已创建带有CrossEncoder Rerank功能的压缩检索器")
         return compression_retriever
     
     def _create_tools(self) -> List[Tool]:
@@ -133,12 +99,10 @@ class DocumentQAAgent:
             Tool(
                 name="document_retrieval",
                 description="搜索并检索与问题相关的文档内容。用于回答需要基于文档知识的问题。",
-                func=self.retrieval_tool.retrieve_documents
+                func=self.retriever.invoke
             )
         ]
         return tools
-    
-
     
     def _build_agent(self) -> AgentExecutor:
         """构建Agent执行器"""
@@ -148,15 +112,11 @@ class DocumentQAAgent:
         system_message = """你是一个智能文档问答助手。你需要基于检索到的文档内容来回答用户问题。
 
 工作流程：
-1. 使用 document_retrieval 工具一次来搜索相关文档
-2. 分析检索到的文档内容
-3. 基于文档内容直接回答用户问题
+1. 使用 document_retrieval 工具一次来搜索相关文档。
+2. 分析检索到的文档内容，并基于此生成最终答案。
 
-重要提示：
-- 只调用 document_retrieval 工具一次就足够了
-- 获得文档后，立即基于文档内容回答问题
-- 如果文档中没有相关信息，请明确说明
-- 不要重复调用相同的工具"""
+**非常重要**: 如果你决定使用工具，你的回答**必须**只包含工具调用的JSON，不要有任何其他文字。一旦获得工具返回的信息，再组织语言回答问题。如果文档中没有相关信息，请明确说明。
+"""
 
         # 创建提示模板，让LangChain自动处理工具部分
         if self.use_memory:
@@ -187,7 +147,7 @@ class DocumentQAAgent:
             verbose=True,
             max_iterations=3,
             handle_parsing_errors=True,
-            return_intermediate_steps=True
+            return_intermediate_steps=True, # 确保返回中间步骤
         )
         
         return agent_executor
@@ -254,8 +214,17 @@ class DocumentQAAgent:
             
             answer = result.get("output", "")
             
-            # 获取相关文档（通过工具调用获得的文档）
-            relevant_docs = self.retrieval_tool.get_raw_documents(question)
+            # 从中间步骤中提取相关文档
+            relevant_docs = []
+            if "intermediate_steps" in result:
+                for action, observation in result["intermediate_steps"]:
+                    if action.tool == "document_retrieval" and isinstance(observation, list):
+                        relevant_docs.extend(doc for doc in observation if isinstance(doc, Document))
+
+            # 如果没有从中间步骤找到，作为后备方案再检索一次
+            if not relevant_docs and question:
+                logger.warning("无法从Agent中间步骤提取文档，执行后备检索。")
+                relevant_docs = self.retriever.invoke(question)
             
             # 保存到记忆（如果启用）
             if self.use_memory and self.memory_manager:
@@ -323,9 +292,17 @@ class DocumentQAAgent:
             
             answer = result.get("output", "")
             
-            # 获取相关文档
-            relevant_docs = self.retrieval_tool.get_raw_documents(question)
+            # 异步地从中间步骤提取文档
+            relevant_docs = []
+            if "intermediate_steps" in result:
+                for action, observation in result["intermediate_steps"]:
+                    if action.tool == "document_retrieval" and isinstance(observation, list):
+                        relevant_docs.extend(doc for doc in observation if isinstance(doc, Document))
             
+            if not relevant_docs and question:
+                logger.warning("无法从Agent中间步骤提取文档，执行后备检索。")
+                relevant_docs = await self.retriever.ainvoke(question)
+
             # 保存到记忆（如果启用）
             if self.use_memory and self.memory_manager:
                 self.memory_manager.add_message_pair(
@@ -411,8 +388,7 @@ class DocumentQAAgent:
     def get_relevant_documents(self, question: str) -> List[Document]:
         """获取与问题相关的文档"""
         logger.info(f"Agent 正在为问题检索相关文档: {question[:100]}...")
-        # 直接使用内部的retrieval_tool来获取原始文档
-        return self.retrieval_tool.get_raw_documents(question)
+        return self.retriever.invoke(question)
     
     def clear_memory(self, session_id: str = "default") -> None:
         """清空指定会话的记忆"""
@@ -431,7 +407,6 @@ class DocumentQAAgent:
         """更新检索器返回的文档数量"""
         self.retriever_k = k
         self.retriever = self._get_retriever()
-        self.retrieval_tool = DocumentRetrievalTool(self.retriever, k)
         # 重新构建Agent
         self.agent_executor = self._build_agent()
         logger.info(f"检索器文档数量已更新为: {k}")
@@ -468,7 +443,6 @@ class ConversationalRetrievalAgent:
         
         # 初始化检索器
         self.retriever = self._get_retriever()
-        self.retrieval_tool = DocumentRetrievalTool(self.retriever, retriever_k)
         
         # 构建Agent
         self.agent_executor = self._build_agent()
@@ -477,13 +451,15 @@ class ConversationalRetrievalAgent:
     
     def _get_retriever(self) -> BaseRetriever:
         """获取带有Rerank功能的检索器"""
+        from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
+        
         if not self.vector_store_manager.vector_store:
             self.vector_store_manager.get_or_create_vector_store()
             
         base_retriever = self.vector_store_manager.get_retriever(k=self.retriever_k)
         
-        # 初始化Reranker
-        reranker = FlashRankRerank()
+        # 初始化FlashrankRerank
+        reranker = FlashrankRerank(model=settings.reranker_model, top_n=3)
         
         # 创建带有上下文压缩的检索器
         compression_retriever = ContextualCompressionRetriever(
@@ -491,7 +467,7 @@ class ConversationalRetrievalAgent:
             base_retriever=base_retriever
         )
         
-        logger.info("已创建带有FlashRank Rerank功能的压缩检索器")
+        logger.info("已创建带有CrossEncoder Rerank功能的压缩检索器")
         return compression_retriever
     
     def _create_tools(self) -> List[Tool]:
@@ -500,12 +476,7 @@ class ConversationalRetrievalAgent:
             Tool(
                 name="document_retrieval",
                 description="搜索并检索与问题相关的文档内容。",
-                func=self.retrieval_tool.retrieve_documents
-            ),
-            Tool(
-                name="standalone_question_generator",
-                description="基于对话历史生成独立的搜索问题。",
-                func=self._generate_standalone_question
+                func=self.retriever.invoke,
             )
         ]
         return tools
@@ -523,15 +494,11 @@ class ConversationalRetrievalAgent:
         
         system_message = """你是一个对话式文档检索助手。你需要：
 
-1. 分析用户的问题和对话历史
-2. 如果需要，重新表述问题以便更好地检索
-3. 使用 document_retrieval 工具检索相关文档
-4. 基于检索结果和对话上下文回答问题
+1. 分析用户的问题和对话历史，如果需要，重新表述问题以便更好地检索。
+2. 使用 document_retrieval 工具检索相关文档。
+3. 基于检索结果和对话上下文回答问题。
 
-工作流程：
-1. 理解当前问题和对话上下文
-2. 使用合适的搜索词检索相关文档
-3. 结合文档内容和对话历史提供准确回答"""
+**非常重要**: 如果你决定使用工具，你的回答**必须**只包含工具调用的JSON，不要有任何其他文字。一旦获得工具返回的信息，再组织语言回答问题。如果文档中没有相关信息，请明确说明。"""
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_message),
@@ -550,7 +517,8 @@ class ConversationalRetrievalAgent:
             tools=tools,
             verbose=True,
             max_iterations=3,
-            handle_parsing_errors=True
+            handle_parsing_errors=True,
+            return_intermediate_steps=True,
         )
         
         return agent_executor
@@ -588,8 +556,16 @@ class ConversationalRetrievalAgent:
             result = self.agent_executor.invoke(input_data)
             answer = result.get("output", "")
             
-            # 获取相关文档
-            relevant_docs = self.retrieval_tool.get_raw_documents(question)
+            # 从中间步骤中提取相关文档
+            relevant_docs = []
+            if "intermediate_steps" in result:
+                for action, observation in result["intermediate_steps"]:
+                    if action.tool == "document_retrieval" and isinstance(observation, list):
+                        relevant_docs.extend(doc for doc in observation if isinstance(doc, Document))
+
+            if not relevant_docs and question:
+                logger.warning("无法从Agent中间步骤提取文档，执行后备检索。")
+                relevant_docs = self.retriever.invoke(question)
             
             response = {
                 "answer": answer,

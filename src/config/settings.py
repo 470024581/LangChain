@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     langchain_project: str = Field("Default", env="LANGCHAIN_PROJECT")
     langchain_endpoint: str = Field("https://api.smith.langchain.com", env="LANGCHAIN_ENDPOINT")
     
+    # Embedding模型
+    embedding_model_name: str = Field("sentence-transformers/all-MiniLM-L6-v2", env="EMBEDDING_MODEL_NAME")
+    
+    # Reranker模型
+    reranker_model: str = Field("BAAI/bge-reranker-base", env="RERANKER_MODEL")
+    
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

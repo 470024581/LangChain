@@ -7,13 +7,15 @@ from langchain_core.runnables import Runnable, RunnablePassthrough, RunnableLamb
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables.config import RunnableConfig
 from langchain.retrievers import ContextualCompressionRetriever
-from langchain_community.document_transformers import FlashRankRerank
+from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
+from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 
 from ..models.llm_factory import LLMFactory
 from ..vectorstores.vector_store import VectorStoreManager
 from ..prompts.prompt_templates import PromptTemplateManager, PromptFormatter
 from ..memory.conversation_memory import ConversationMemoryManager
 from ..utils.langsmith_utils import langsmith_manager, with_langsmith_tracing
+from ..config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -66,8 +68,8 @@ class DocumentQAChain:
         
         base_retriever = self.vector_store_manager.get_retriever(k=self.retriever_k)
         
-        # 初始化Reranker
-        reranker = FlashRankRerank()
+        # 初始化FlashrankRerank
+        reranker = FlashrankRerank(model=settings.reranker_model, top_n=3)
         
         # 创建带有上下文压缩的检索器
         compression_retriever = ContextualCompressionRetriever(
@@ -75,7 +77,7 @@ class DocumentQAChain:
             base_retriever=base_retriever
         )
         
-        logger.info("已创建带有FlashRank Rerank功能的压缩检索器")
+        logger.info("已创建带有CrossEncoder Rerank功能的压缩检索器")
         return compression_retriever
     
     def _build_chain(self) -> Runnable:
@@ -334,13 +336,15 @@ class ConversationalRetrievalChain:
     
     def _get_retriever(self) -> BaseRetriever:
         """获取带有Rerank功能的检索器"""
+        from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
+        
         if not self.vector_store_manager.vector_store:
             self.vector_store_manager.get_or_create_vector_store()
         
         base_retriever = self.vector_store_manager.get_retriever(k=self.retriever_k)
-
-        # 初始化Reranker
-        reranker = FlashRankRerank()
+        
+        # 初始化FlashrankRerank
+        reranker = FlashrankRerank(model=settings.reranker_model, top_n=3)
         
         # 创建带有上下文压缩的检索器
         compression_retriever = ContextualCompressionRetriever(
@@ -348,7 +352,7 @@ class ConversationalRetrievalChain:
             base_retriever=base_retriever
         )
         
-        logger.info("已创建带有FlashRank Rerank功能的压缩检索器")
+        logger.info("已创建带有CrossEncoder Rerank功能的压缩检索器")
         return compression_retriever
     
     def _build_standalone_question_chain(self) -> Runnable:
