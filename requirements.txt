@@ -20,3 +20,4 @@ sentence-transformers>=3.1.1
 transformers>=4.46.0
 torch>=2.1.0
 numpy>=1.24.0 
+flashrank>=0.2.10

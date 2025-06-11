@@ -74,6 +74,7 @@ def main():
     chat_parser.add_argument("--session", default="default", help="会话ID")
     chat_parser.add_argument("--no-memory", action="store_true", help="不使用记忆功能")
     chat_parser.add_argument("--conversational", action="store_true", help="使用对话式检索")
+    chat_parser.add_argument("--use-agent", action="store_true", help="使用Agent架构而非Chain架构")
     
     # 服务器模式
     server_parser = subparsers.add_parser("server", help="启动API服务器")
@@ -367,24 +368,42 @@ def handle_chat_command(args):
     try:
         from src.vectorstores.vector_store import VectorStoreManager
         from src.chains.qa_chain import DocumentQAChain, ConversationalRetrievalChain
+        from src.agents.rag_agent import DocumentQAAgent, ConversationalRetrievalAgent
         from src.agents.sql_agent import SQLAgent
         
         # 初始化向量存储
         vector_manager = VectorStoreManager(use_openai_embeddings=False)
         vector_manager.get_or_create_vector_store()
         
-        # 初始化问答链
-        if args.conversational:
-            qa_chain = ConversationalRetrievalChain(vector_store_manager=vector_manager)
-            print("使用对话式检索链")
+        # 初始化问答系统（Chain或Agent）
+        if args.use_agent:
+            # 使用Agent架构
+            if args.conversational:
+                qa_system = ConversationalRetrievalAgent(vector_store_manager=vector_manager)
+                print("使用对话式检索Agent 🤖")
+            else:
+                use_memory = not args.no_memory
+                qa_system = DocumentQAAgent(
+                    vector_store_manager=vector_manager,
+                    model_name=args.model,
+                    use_memory=use_memory
+                )
+                print(f"使用文档问答Agent 🤖，记忆功能: {'开启' if use_memory else '关闭'}")
         else:
-            use_memory = not args.no_memory
-            qa_chain = DocumentQAChain(
-                vector_store_manager=vector_manager,
-                model_name=args.model,
-                use_memory=use_memory
-            )
-            print(f"使用标准问答链，记忆功能: {'开启' if use_memory else '关闭'}")
+            # 使用Chain架构
+            if args.conversational:
+                qa_system = ConversationalRetrievalChain(vector_store_manager=vector_manager)
+                print("使用对话式检索Chain ⛓️")
+            else:
+                use_memory = not args.no_memory
+                qa_system = DocumentQAChain(
+                    vector_store_manager=vector_manager,
+                    model_name=args.model,
+                    use_memory=use_memory
+                )
+                print(f"使用标准问答Chain ⛓️，记忆功能: {'开启' if use_memory else '关闭'}")
+        
+        qa_chain = qa_system  # 保持变量名兼容性
         
         # 初始化SQL Agent
         try:
@@ -465,15 +484,30 @@ def handle_chat_command(args):
                     print("📄 文档检索中...")
                     
                     if args.conversational:
-                        result = qa_chain.invoke(question=question, session_id=session_id)
+                        if args.use_agent:
+                            # Agent版本：对话式检索Agent
+                            result = qa_chain.invoke(question=question, chat_history=[])
+                        else:
+                            # Chain版本：对话式检索链
+                            result = qa_chain.invoke(question=question, session_id=session_id)
                     else:
+                        # 标准问答（Agent或Chain）
                         result = qa_chain.invoke(question, session_id)
                     
                     print(f"\n答案: {result['answer']}")
                     
+                    # 显示Agent的中间步骤（仅Agent版本）
+                    if args.use_agent and result.get('intermediate_steps'):
+                        print(f"\n🤖 Agent执行步骤({len(result['intermediate_steps'])}个):")
+                        for i, step in enumerate(result['intermediate_steps'][:2], 1):
+                            if hasattr(step, '__dict__'):
+                                print(f"  {i}. {step}")
+                            else:
+                                print(f"  {i}. {str(step)[:100]}...")
+                    
                     # 显示相关文档
                     if result.get('relevant_documents'):
-                        print(f"\n相关文档({len(result['relevant_documents'])}个):")
+                        print(f"\n📚 相关文档({len(result['relevant_documents'])}个):")
                         for i, doc in enumerate(result['relevant_documents'][:2], 1):
                             source = doc['metadata'].get('source_file', 'Unknown')
                             content = doc['content'][:200] + "..." if len(doc['content']) > 200 else doc['content']

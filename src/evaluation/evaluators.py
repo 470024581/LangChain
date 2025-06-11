@@ -29,8 +29,9 @@ class EvaluatorType(Enum):
 class AccuracyEvaluator(LangChainStringEvaluator):
     """准确性评估器"""
     
-    def __init__(self, llm: Optional[BaseLanguageModel] = None):
-        self.llm = llm or LLMFactory.create_openrouter_llm()
+    def __init__(self, llm: Optional[BaseLanguageModel] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.llm = llm or LLMFactory.create_llm()
         self.name = "accuracy"
         self.description = "评估答案的准确性"
     
@@ -100,8 +101,9 @@ AI回答: {prediction}
 class RelevanceEvaluator(LangChainStringEvaluator):
     """相关性评估器"""
     
-    def __init__(self, llm: Optional[BaseLanguageModel] = None):
-        self.llm = llm or LLMFactory.create_openrouter_llm()
+    def __init__(self, llm: Optional[BaseLanguageModel] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.llm = llm or LLMFactory.create_llm()
         self.name = "relevance"
         self.description = "评估答案与问题的相关性"
     
@@ -166,8 +168,9 @@ AI回答: {prediction}
 class HelpfulnessEvaluator(LangChainStringEvaluator):
     """有用性评估器"""
     
-    def __init__(self, llm: Optional[BaseLanguageModel] = None):
-        self.llm = llm or LLMFactory.create_openrouter_llm()
+    def __init__(self, llm: Optional[BaseLanguageModel] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.llm = llm or LLMFactory.create_llm()
         self.name = "helpfulness"
         self.description = "评估答案的有用性"
     
@@ -233,8 +236,9 @@ AI回答: {prediction}
 class GroundednessEvaluator(LangChainStringEvaluator):
     """基于事实的评估器"""
     
-    def __init__(self, llm: Optional[BaseLanguageModel] = None):
-        self.llm = llm or LLMFactory.create_openrouter_llm()
+    def __init__(self, llm: Optional[BaseLanguageModel] = None, **kwargs):
+        super().__init__(**kwargs)
+        self.llm = llm or LLMFactory.create_llm()
         self.name = "groundedness"
         self.description = "评估答案是否基于提供的文档内容"
     
