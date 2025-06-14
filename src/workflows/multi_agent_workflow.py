@@ -213,8 +213,13 @@ class AnswerAgent:
                 success = retrieval_result.get("success", False)
                 
                 if success:
-                    # SQL查询成功，直接使用SQL Agent的答案
-                    retrieval_info = f"SQL查询结果：\n{sql_answer}"
+                    # SQL查询成功，直接返回SQL Agent的答案，不再通过LLM重新处理
+                    logger.info(f"SQL查询成功，直接返回SQL Agent答案: {sql_answer[:100]}...")
+                    return {
+                        "answer": sql_answer,
+                        "reasoning": "SQL查询成功，直接使用SQL Agent的答案",
+                        "success": True
+                    }
                 else:
                     # SQL查询失败
                     error_msg = retrieval_result.get("error", "未知错误")
@@ -497,9 +502,11 @@ class MultiAgentWorkflow:
                 "answer": "抱歉，SQL查询功能当前不可用。"
             }
         else:
+            # 为SQL Agent使用独立的会话ID，避免记忆污染
+            sql_session_id = f"sql_{state['session_id']}"
             result = self.sql_agent.query(
                 question=state["user_question"],
-                session_id=state["session_id"]
+                session_id=sql_session_id
             )
             
             # 添加调试日志

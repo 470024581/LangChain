@@ -197,9 +197,16 @@ Question: {{input}}
             }
 
         try:
-            # 如果使用记忆，从记忆中获取上下文
+            # 检查是否为简单的数据库结构查询，这类查询不需要历史上下文
+            simple_queries = [
+                "表", "table", "数据库", "database", "结构", "schema", 
+                "列", "column", "字段", "field", "有哪些", "什么表"
+            ]
+            is_simple_query = any(keyword in question.lower() for keyword in simple_queries)
+            
+            # 如果使用记忆且不是简单查询，从记忆中获取上下文
             chat_history = ""
-            if self.use_memory and self.memory_manager:
+            if self.use_memory and self.memory_manager and not is_simple_query:
                 history = self.memory_manager.get_chat_history(session_id)
                 if history:
                     # 格式化聊天历史
@@ -211,6 +218,11 @@ Question: {{input}}
                     if history_texts:
                         chat_history = "\n".join(history_texts)
                         question = f"聊天历史：\n{chat_history}\n\n当前问题：{question}"
+                        logger.info("使用聊天历史上下文")
+                else:
+                    logger.info("没有找到聊天历史")
+            elif is_simple_query:
+                logger.info("检测到简单数据库查询，跳过历史上下文")
             
             logger.info(f"执行SQL Agent查询: {question}")
             # 参考示例代码：Agent的invoke方法期望一个带有"input"键的字典
