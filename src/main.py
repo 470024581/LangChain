@@ -15,6 +15,7 @@ sys.path.insert(0, str(project_root))
 
 from src.vectorstores.vector_store import VectorStoreManager
 from src.chains.qa_chain import DocumentQAChain
+from src.workflows.multi_agent_workflow import MultiAgentWorkflow
 from src.config.settings import settings
 
 # 配置日志
@@ -75,6 +76,7 @@ def main():
     chat_parser.add_argument("--no-memory", action="store_true", help="不使用记忆功能")
     chat_parser.add_argument("--conversational", action="store_true", help="使用对话式检索")
     chat_parser.add_argument("--use-agent", action="store_true", help="使用Agent架构而非Chain架构")
+    chat_parser.add_argument("--use-workflow", action="store_true", help="使用多智能体工作流(LangGraph)")
     
     # 服务器模式
     server_parser = subparsers.add_parser("server", help="启动API服务器")
@@ -415,18 +417,43 @@ def handle_chat_command(args):
             sql_available = False
             print(f"SQL Agent 初始化失败: {str(e)}")
         
+        # 初始化多智能体工作流（如果启用）
+        workflow = None
+        if args.use_workflow:
+            try:
+                # 设置数据库路径
+                sql_db_path = "data/database/erp.db"
+                workflow = MultiAgentWorkflow(
+                    vector_store_manager=vector_manager,
+                    sql_db_path=sql_db_path,
+                    model_name=args.model,
+                    max_iterations=2
+                )
+                print("🔄 多智能体工作流初始化成功")
+            except Exception as e:
+                print(f"多智能体工作流初始化失败: {str(e)}")
+                workflow = None
+        
         print("\n=== 智能问答系统 ===")
+        if args.use_workflow and workflow:
+            print("🔄 多智能体工作流模式 (Router → SQL/RAG → Answer → Review)")
+        elif args.use_agent:
+            print("🤖 Agent模式")
+        else:
+            print("⛓️ Chain模式")
         print("📄 文档问答 | 🗃️ SQL查询")
         print("输入问题开始对话，输入 'quit' 或 'exit' 退出")
         print("输入 'clear' 清空记忆")
-        print("输入 'sql:' 前缀进行SQL查询")
-        print("输入 'mode doc' 切换到文档问答模式")
-        print("输入 'mode sql' 切换到SQL查询模式")
+        if not args.use_workflow:
+            print("输入 'sql:' 前缀进行SQL查询")
+            print("输入 'mode doc' 切换到文档问答模式")
+            print("输入 'mode sql' 切换到SQL查询模式")
         print("=" * 50)
         
         session_id = args.session
         current_mode = "doc"  # 默认文档模式
-        print(f"当前模式: {'📄 文档问答' if current_mode == 'doc' else '🗃️ SQL查询'}")
+        if not args.use_workflow:
+            print(f"当前模式: {'📄 文档问答' if current_mode == 'doc' else '🗃️ SQL查询'}")
         
         while True:
             try:
@@ -438,7 +465,13 @@ def handle_chat_command(args):
                     break
                 
                 if question.lower() in ['clear', '清空']:
-                    if current_mode == "doc":
+                    if args.use_workflow and workflow:
+                        # 工作流模式下清空各个组件的记忆
+                        if workflow.rag_agent:
+                            workflow.rag_agent.clear_memory(session_id)
+                        if workflow.sql_agent:
+                            workflow.sql_agent.clear_memory(session_id)
+                    elif current_mode == "doc":
                         if hasattr(qa_chain, 'clear_memory'):
                             qa_chain.clear_memory(session_id)
                         elif hasattr(qa_chain, 'memory_manager'):
@@ -462,6 +495,33 @@ def handle_chat_command(args):
                     continue
                 
                 if not question:
+                    continue
+                
+                # 工作流模式处理
+                if args.use_workflow and workflow:
+                    print("🔄 多智能体工作流处理中...")
+                    result = workflow.run(question, session_id=session_id)
+                    
+                    print(f"\n🎯 路由决策: {result['query_type']} - {result['router_reasoning']}")
+                    print(f"📝 答案: {result['answer']}")
+                    print(f"⭐ 审阅得分: {result['review_score']:.1f}/10.0")
+                    print(f"✅ 审阅状态: {'通过' if result['review_approved'] else '未通过'}")
+                    
+                    if result['review_feedback']:
+                        print(f"💡 审阅建议: {result['review_feedback']}")
+                    
+                    if result['iteration_count'] > 1:
+                        print(f"🔄 迭代次数: {result['iteration_count']}")
+                    
+                    # 显示相关文档（如果是RAG查询）
+                    if result.get('retrieved_documents') and result['query_type'] == 'rag':
+                        print(f"\n📚 相关文档({len(result['retrieved_documents'])}个):")
+                        for i, doc in enumerate(result['retrieved_documents'][:2], 1):
+                            source = doc.get('metadata', {}).get('source_file', 'Unknown')
+                            content = doc.get('content', '')[:200] + "..." if len(doc.get('content', '')) > 200 else doc.get('content', '')
+                            print(f"  {i}. 来源: {source}")
+                            print(f"     内容: {content}")
+                    
                     continue
                 
                 # 处理SQL查询（无论当前模式）

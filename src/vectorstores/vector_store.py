@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class VectorStoreManager:
     """向量存储管理器"""
     
-    def __init__(self, use_openai_embeddings: bool = True):
+    def __init__(self, use_openai_embeddings: bool = False):
         """
         初始化向量存储管理器
         
@@ -39,11 +39,12 @@ class VectorStoreManager:
             except Exception as e:
                 logger.warning(f"OpenAI embeddings初始化失败: {e}, 切换到HuggingFace")
                 self.embeddings = HuggingFaceEmbeddings(
-                    model_name="sentence-transformers/all-MiniLM-L6-v2"
+                    model_name=settings.embedding_model_name
                 )
+                logger.info("使用HuggingFace embeddings")
         else:
             self.embeddings = HuggingFaceEmbeddings(
-                model_name="sentence-transformers/all-MiniLM-L6-v2"
+                model_name=settings.embedding_model_name
             )
             logger.info("使用HuggingFace embeddings")
         

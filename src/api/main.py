@@ -10,6 +10,7 @@ from langserve import add_routes
 
 from ..chains.qa_chain import DocumentQAChain, ConversationalRetrievalChain
 from ..agents.sql_agent import SQLAgent
+from ..workflows.multi_agent_workflow import MultiAgentWorkflow
 from ..vectorstores.vector_store import VectorStoreManager
 from ..memory.conversation_memory import SessionManager
 from ..config.settings import settings
@@ -27,13 +28,14 @@ vector_store_manager: Optional[VectorStoreManager] = None
 qa_chain: Optional[DocumentQAChain] = None
 conversational_chain: Optional[ConversationalRetrievalChain] = None
 sql_agent: Optional[SQLAgent] = None
+multi_agent_workflow: Optional[MultiAgentWorkflow] = None
 session_manager: SessionManager = SessionManager()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    global vector_store_manager, qa_chain, conversational_chain, sql_agent
+    global vector_store_manager, qa_chain, conversational_chain, sql_agent, multi_agent_workflow
     
     logger.info("初始化应用...")
     
@@ -60,6 +62,17 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"SQL Agent初始化失败: {str(e)}")
             sql_agent = None
+        
+        # 初始化多智能体工作流
+        try:
+            multi_agent_workflow = MultiAgentWorkflow(
+                vector_store_manager=vector_store_manager,
+                max_iterations=2
+            )
+            logger.info("多智能体工作流初始化完成")
+        except Exception as e:
+            logger.warning(f"多智能体工作流初始化失败: {str(e)}")
+            multi_agent_workflow = None
         
         # 添加LangServe路由
         add_routes(
@@ -151,6 +164,28 @@ class SQLQueryResponse(BaseModel):
     error: Optional[str] = Field(None, description="错误信息")
 
 
+class WorkflowRequest(BaseModel):
+    """工作流请求模型"""
+    question: str = Field(..., description="用户问题")
+    session_id: str = Field(default="default", description="会话ID")
+
+
+class WorkflowResponse(BaseModel):
+    """工作流响应模型"""
+    question: str = Field(..., description="原始问题")
+    answer: str = Field(..., description="生成的答案")
+    query_type: str = Field(..., description="查询类型(sql/rag)")
+    router_reasoning: str = Field(..., description="路由决策理由")
+    review_score: float = Field(..., description="审阅得分")
+    review_feedback: str = Field(..., description="审阅反馈")
+    review_approved: bool = Field(..., description="审阅是否通过")
+    iteration_count: int = Field(..., description="迭代次数")
+    retrieved_documents: Optional[List[Dict[str, Any]]] = Field(None, description="检索到的文档")
+    session_id: str = Field(..., description="会话ID")
+    success: bool = Field(..., description="执行是否成功")
+    error: Optional[str] = Field(None, description="错误信息")
+
+
 def get_qa_chain() -> DocumentQAChain:
     """获取问答链实例"""
     if qa_chain is None:
@@ -179,6 +214,13 @@ def get_sql_agent() -> SQLAgent:
     return sql_agent
 
 
+def get_multi_agent_workflow() -> MultiAgentWorkflow:
+    """获取多智能体工作流实例"""
+    if multi_agent_workflow is None:
+        raise HTTPException(status_code=500, detail="多智能体工作流未初始化")
+    return multi_agent_workflow
+
+
 # API路由
 @app.get("/")
 async def root():
@@ -194,6 +236,7 @@ async def health_check():
         qa_status = qa_chain is not None
         vector_status = vector_store_manager is not None and vector_store_manager.vector_store is not None
         sql_status = sql_agent is not None
+        workflow_status = multi_agent_workflow is not None
         langsmith_status = langsmith_manager.is_enabled
         
         return {
@@ -201,6 +244,7 @@ async def health_check():
             "qa_chain": "ready" if qa_status else "not ready",
             "vector_store": "ready" if vector_status else "not ready",
             "sql_agent": "ready" if sql_status else "not ready",
+            "multi_agent_workflow": "ready" if workflow_status else "not ready",
             "langsmith": "enabled" if langsmith_status else "disabled"
         }
     except Exception as e:
@@ -711,6 +755,68 @@ async def get_sql_memory_stats(
     except Exception as e:
         logger.error(f"获取SQL记忆统计失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取记忆统计失败: {str(e)}")
+
+
+# ===============================
+# 多智能体工作流相关端点
+# ===============================
+
+@app.post("/workflow/run", response_model=WorkflowResponse)
+async def run_workflow(
+    request: WorkflowRequest,
+    workflow: MultiAgentWorkflow = Depends(get_multi_agent_workflow)
+):
+    """运行多智能体工作流"""
+    try:
+        logger.info(f"收到工作流请求: {request.question[:100]}...")
+        
+        result = workflow.run(
+            question=request.question,
+            session_id=request.session_id
+        )
+        
+        return WorkflowResponse(**result)
+        
+    except Exception as e:
+        logger.error(f"工作流执行失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"工作流执行失败: {str(e)}")
+
+
+@app.get("/workflow/info")
+async def get_workflow_info(
+    workflow: MultiAgentWorkflow = Depends(get_multi_agent_workflow)
+):
+    """获取工作流信息"""
+    try:
+        info = workflow.get_workflow_info()
+        return {
+            "status": "success",
+            "workflow_info": info
+        }
+        
+    except Exception as e:
+        logger.error(f"获取工作流信息失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取工作流信息失败: {str(e)}")
+
+
+@app.delete("/workflow/memory/{session_id}")
+async def clear_workflow_memory(
+    session_id: str,
+    workflow: MultiAgentWorkflow = Depends(get_multi_agent_workflow)
+):
+    """清空工作流记忆"""
+    try:
+        # 清空RAG和SQL智能体的记忆
+        if workflow.rag_agent:
+            workflow.rag_agent.clear_memory(session_id)
+        if workflow.sql_agent:
+            workflow.sql_agent.clear_memory(session_id)
+        
+        return {"message": f"工作流会话 {session_id} 的记忆已清空"}
+        
+    except Exception as e:
+        logger.error(f"清空工作流记忆失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"清空工作流记忆失败: {str(e)}")
 
 
 if __name__ == "__main__":

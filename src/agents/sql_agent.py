@@ -7,11 +7,13 @@ import logging
 import os
 from typing import Dict, Any, Optional, List
 from pathlib import Path
+from langchain.agents import AgentType
 
-from langchain_community.agent_toolkits import create_sql_agent
+from langchain_community.agent_toolkits import create_sql_agent, SQLDatabaseToolkit
 from langchain_community.utilities import SQLDatabase
-from langchain.agents import AgentExecutor
+from langchain.agents import AgentExecutor, initialize_agent
 from langchain_core.runnables.config import RunnableConfig
+from langchain_core.prompts import PromptTemplate
 
 from ..models.llm_factory import LLMFactory
 from ..memory.conversation_memory import ConversationMemoryManager
@@ -94,57 +96,47 @@ class SQLAgent:
             raise
     
     def _create_sql_agent(self) -> AgentExecutor:
-        """创建 SQL Agent"""
+        """创建 SQL Agent（使用自定义提示词）"""
         try:
-            # 使用 LangChain 的 create_sql_agent 函数
-            agent_executor = create_sql_agent(
+            # 创建自定义系统提示词，解决输出解析问题
+            system_message = """You are an agent designed to interact with a SQL database.
+Given an input question, create a syntactically correct SQLite query to run, then look at the results of the query and return the answer.
+Unless the user specifies a specific number of examples they wish to obtain, always limit your query to at most 5 results.
+You can order the results by a relevant column to return the most interesting examples in the database.
+Never query for all the columns from a specific table, only ask for the relevant columns given the question.
+You have access to tools for interacting with the database.
+Only use the below tools. Only use the information returned by the below tools to construct your final answer.
+You MUST double check your query before executing it. If you get an error while executing a query, rewrite the query and try again.
+
+DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
+
+IMPORTANT OUTPUT FORMAT RULES:
+- Only one step at a time.
+- Either output "Action: <action>" or "Final Answer: <answer>".
+- Do not output both in the same response.
+- When you have the final answer, ONLY output "Final Answer: <your answer>".
+- When you need to use a tool, ONLY output "Action: <tool_name>" followed by "Action Input: <input>".
+
+If the question does not seem related to the database, just return "I don't know" as the answer."""
+
+            # 创建自定义提示词模板
+            prompt = PromptTemplate.from_template(f"""{system_message}
+
+Question: {{input}}
+{{agent_scratchpad}}""")
+
+            # 创建SQL数据库工具包
+            toolkit = SQLDatabaseToolkit(db=self.db, llm=self.llm)
+            tools = toolkit.get_tools()
+
+            # 使用initialize_agent创建代理
+            agent_executor = initialize_agent(
+                tools=tools,
                 llm=self.llm,
-                db=self.db,
+                agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
+                prompt=prompt,
                 verbose=self.verbose,
-                handle_parsing_errors=True,
-                # 设置 agent 类型
-                agent_type="tool-calling",
-                # 自定义前缀来改善中文支持
-                prefix="""
-你是一个专业的数据库查询助手。你的任务是理解用户的自然语言问题，并生成相应的SQL查询来获取所需信息。
-
-你有以下几个工具可以使用：
-1. sql_db_list_tables: 列出数据库中的所有表
-2. sql_db_schema: 获取表的结构信息
-3. sql_db_query: 执行SQL查询并返回结果
-4. sql_db_query_checker: 检查SQL查询的正确性
-
-数据库说明：
-- products表：包含产品信息（product_id, product_name, category, unit_price）
-- inventory表：包含库存信息（product_id, stock_level, last_updated）
-- sales表：包含销售记录（sale_id, product_id, product_name, quantity_sold, price_per_unit, total_amount, sale_date）
-
-请按照以下步骤处理用户问题：
-1. 理解用户的问题和意图
-2. 确定需要查询哪些表
-3. 生成正确的SQL语句
-4. 执行查询并获取结果
-5. 用自然语言总结结果
-
-注意事项：
-- 始终检查SQL语句的正确性
-- 如果查询返回空结果，请说明可能的原因
-- 对于复杂查询，可以使用JOIN连接多个表
-- 金额和数量请保留适当的小数位数
-""",
-                # 设置后缀
-                suffix="开始吧！记住首先了解表结构，然后根据用户问题生成合适的SQL查询。",
-                # 设置格式说明
-                format_instructions="""使用以下格式回答：
-
-问题：用户的原始问题
-思考：你需要做什么来回答这个问题
-行动：要采取的行动，应该是[sql_db_list_tables, sql_db_schema, sql_db_query, sql_db_query_checker]之一
-行动输入：行动的输入
-观察：行动的结果
-... (这个思考/行动/行动输入/观察可以重复多次)
-思考：我现在知道最终答案了
-最终答案：对原始输入问题的最终答案"""
+                handle_parsing_errors=True
             )
             
             logger.info("SQL Agent 创建成功")
@@ -181,7 +173,7 @@ class SQLAgent:
         **kwargs
     ) -> Dict[str, Any]:
         """
-        执行SQL查询
+        执行SQL查询（同步方法，兼容现有代码）
         
         Args:
             question: 用户的自然语言问题
@@ -191,9 +183,20 @@ class SQLAgent:
         Returns:
             包含查询结果的字典
         """
+        logger.info(f"处理SQL查询: {question[:100]}...")
+
+        if not self.llm:
+            logger.error("LLM未初始化，SQL Agent查询无法执行")
+            return {
+                "query": question, 
+                "query_type": "sql_agent", 
+                "success": False,
+                "answer": "SQL Agent功能无法执行，因为LLM未初始化。",
+                "data": {"session_id": session_id},
+                "error": "LLM未初始化，SQL Agent无法使用。"
+            }
+
         try:
-            logger.info(f"处理SQL查询: {question[:100]}...")
-            
             # 如果使用记忆，从记忆中获取上下文
             chat_history = ""
             if self.use_memory and self.memory_manager:
@@ -209,7 +212,8 @@ class SQLAgent:
                         chat_history = "\n".join(history_texts)
                         question = f"聊天历史：\n{chat_history}\n\n当前问题：{question}"
             
-            # 执行查询
+            logger.info(f"执行SQL Agent查询: {question}")
+            # 参考示例代码：Agent的invoke方法期望一个带有"input"键的字典
             if self.langsmith_config:
                 result = self.agent_executor.invoke(
                     {"input": question}, 
@@ -219,7 +223,103 @@ class SQLAgent:
                 result = self.agent_executor.invoke({"input": question})
             
             # 提取答案
-            answer = result.get("output", "抱歉，无法获取查询结果。")
+            answer = result.get("output", "无法从SQL Agent获取答案。")
+            logger.info(f"SQL Agent执行完成。答案: {answer}")
+            
+            # 保存到记忆
+            if self.use_memory and self.memory_manager:
+                self.memory_manager.add_message_pair(
+                    user_message=question.split("当前问题：")[-1] if "当前问题：" in question else question,
+                    ai_message=answer,
+                    session_id=session_id
+                )
+            
+            # 构建返回结果（参考示例代码的返回格式）
+            response = {
+                "query": question,
+                "query_type": "sql_agent",
+                "success": True,
+                "answer": answer,
+                "data": {
+                    "session_id": session_id,
+                    "intermediate_steps": result.get("intermediate_steps", [])
+                }
+            }
+            
+            logger.info("SQL查询处理完成")
+            return response
+            
+        except Exception as e:
+            error_msg = f"SQL查询失败: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            
+            return {
+                "query": question, 
+                "query_type": "sql_agent", 
+                "success": False,
+                "answer": f"执行SQL查询时发生错误: {str(e)}",
+                "data": {"session_id": session_id},
+                "error": str(e)
+            }
+    
+    def query_sync(
+        self, 
+        question: str, 
+        session_id: str = "default",
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        同步执行SQL查询（向后兼容）
+        
+        Args:
+            question: 用户的自然语言问题
+            session_id: 会话ID（如果使用记忆）
+            **kwargs: 其他参数
+        
+        Returns:
+            包含查询结果的字典
+        """
+        logger.info(f"处理同步SQL查询: {question[:100]}...")
+
+        if not self.llm:
+            logger.error("LLM未初始化，SQL Agent查询无法执行")
+            return {
+                "query": question, 
+                "query_type": "sql_agent", 
+                "success": False,
+                "answer": "SQL Agent功能无法执行，因为LLM未初始化。",
+                "data": {"session_id": session_id},
+                "error": "LLM未初始化。"
+            }
+
+        try:
+            # 如果使用记忆，从记忆中获取上下文
+            chat_history = ""
+            if self.use_memory and self.memory_manager:
+                history = self.memory_manager.get_chat_history(session_id)
+                if history:
+                    # 格式化聊天历史
+                    history_texts = []
+                    for msg in history[-4:]:  # 只取最近4轮对话
+                        if hasattr(msg, 'content'):
+                            role = "用户" if msg.type == "human" else "助手"
+                            history_texts.append(f"{role}: {msg.content}")
+                    if history_texts:
+                        chat_history = "\n".join(history_texts)
+                        question = f"聊天历史：\n{chat_history}\n\n当前问题：{question}"
+            
+            # 同步执行查询
+            if self.langsmith_config:
+                result = self.agent_executor.invoke(
+                    {"input": question}, 
+                    config=self.langsmith_config
+                )
+            else:
+                result = self.agent_executor.invoke({"input": question})
+            
+            # 提取答案
+            answer = result.get("output", "无法从SQL Agent获取答案。")
+            logger.info(f"同步SQL Agent执行完成。答案: {answer}")
             
             # 保存到记忆
             if self.use_memory and self.memory_manager:
@@ -231,29 +331,108 @@ class SQLAgent:
             
             # 构建返回结果
             response = {
+                "query": question,
+                "query_type": "sql_agent",
+                "success": True,
                 "answer": answer,
-                "question": question,
-                "session_id": session_id,
-                "intermediate_steps": result.get("intermediate_steps", []),
-                "success": True
+                "data": {
+                    "session_id": session_id,
+                    "intermediate_steps": result.get("intermediate_steps", [])
+                }
             }
             
-            logger.info("SQL查询处理完成")
+            logger.info("同步SQL查询处理完成")
             return response
             
         except Exception as e:
-            error_msg = f"SQL查询失败: {str(e)}"
-            logger.error(error_msg)
+            error_msg = f"同步SQL查询失败: {str(e)}"
+            logger.error(error_msg, exc_info=True)
             
             return {
-                "answer": error_msg,
-                "question": question,
-                "session_id": session_id,
+                "query": question, 
+                "query_type": "sql_agent", 
                 "success": False,
+                "answer": f"执行同步SQL查询时发生错误: {str(e)}",
+                "data": {"session_id": session_id},
                 "error": str(e)
             }
     
-    def get_database_info(self) -> Dict[str, Any]:
+    async def query_table(
+        self, 
+        query: str, 
+        table_name: str,
+        session_id: str = "default"
+    ) -> Dict[str, Any]:
+        """
+        查询指定表（参考示例代码实现方式）
+        
+        Args:
+            query: 用户查询
+            table_name: 指定的表名
+            session_id: 会话ID
+        
+        Returns:
+            查询结果字典
+        """
+        logger.info(f"查询指定表 {table_name}: {query}")
+
+        if not self.llm:
+            logger.error("LLM未初始化，SQL Agent查询无法执行")
+            return {
+                "query": query, 
+                "query_type": "sql_agent", 
+                "success": False,
+                "answer": "SQL Agent功能无法执行，因为LLM未初始化。",
+                "data": {"queried_table": table_name, "session_id": session_id},
+                "error": "LLM未初始化。"
+            }
+
+        try:
+            logger.info(f"为表 {table_name} 初始化SQLDatabase，使用数据库: {self.db_path}")
+            # 参考示例代码：SQLDatabase连接到主数据库，但只包含指定的表
+            db_uri = f"sqlite:///{self.db_path}"
+            db = SQLDatabase.from_uri(db_uri, include_tables=[table_name])
+            
+            logger.info(f"为表 {table_name} 创建SQL Agent")
+            # 参考示例代码：创建专门的SQL Agent
+            sql_agent_executor = create_sql_agent(
+                llm=self.llm, 
+                db=db, 
+                verbose=True, 
+                handle_parsing_errors=True
+            )
+            
+            logger.info(f"使用查询执行SQL Agent: {query}")
+            # 参考示例代码：Agent的ainvoke方法期望一个带有"input"键的字典
+            response = await sql_agent_executor.ainvoke({"input": query})
+            
+            answer = response.get("output", "无法从SQL Agent获取答案。")
+            logger.info(f"表 {table_name} 的SQL Agent执行完成。答案: {answer}")
+            
+            return {
+                "query": query, 
+                "query_type": "sql_agent", 
+                "success": True,
+                "answer": answer,
+                "data": {
+                    "queried_table": table_name,
+                    "session_id": session_id,
+                    "intermediate_steps": response.get("intermediate_steps", [])
+                }
+            }
+
+        except Exception as e:
+            logger.error(f"表 {table_name} 的SQL Agent查询失败: {e}", exc_info=True)
+            return {
+                "query": query, 
+                "query_type": "sql_agent", 
+                "success": False,
+                "answer": f"在表 '{table_name}' 中执行SQL查询时发生错误。",
+                "data": {"queried_table": table_name, "session_id": session_id},
+                "error": str(e)
+            }
+
+    async def get_database_info(self) -> Dict[str, Any]:
         """获取数据库信息"""
         try:
             # 获取表列表
@@ -325,4 +504,53 @@ def create_sql_agent_simple(
         db_path=db_path,
         model_name=model_name,
         **kwargs
-    ) 
+    )
+
+
+# 按照示例代码实现方式的便捷函数
+async def get_sql_agent_response(
+    query: str,
+    db_path: str = None,
+    model_name: str = None,
+    table_name: str = None,
+    **kwargs
+) -> Dict[str, Any]:
+    """
+    按照示例代码实现方式获取SQL Agent响应的便捷函数
+    
+    Args:
+        query: 用户查询
+        db_path: 数据库路径
+        model_name: 模型名称  
+        table_name: 特定表名（用于单表查询）
+        **kwargs: 其他参数
+    
+    Returns:
+        查询结果字典
+    """
+    try:
+        # 创建SQL Agent实例
+        agent = SQLAgent(
+            db_path=db_path,
+            model_name=model_name,
+            use_memory=False,  # 便捷函数不使用记忆
+            verbose=False
+        )
+        
+        # 如果指定了表名，使用查询特定表的方法
+        if table_name:
+            return await agent.query_table(query, table_name, session_id="convenience_function")
+        else:
+            # 否则使用常规查询（同步）
+            return agent.query(query, session_id="convenience_function")
+            
+    except Exception as e:
+        logger.error(f"便捷函数SQL Agent查询失败: {str(e)}")
+        return {
+            "query": query,
+            "query_type": "sql_agent",
+            "success": False,
+            "answer": f"SQL查询执行失败: {str(e)}",
+            "data": {"queried_table": table_name} if table_name else {},
+            "error": str(e)
+        } 
