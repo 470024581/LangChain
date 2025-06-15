@@ -586,7 +586,7 @@ class MultiAgentWorkflow:
     
     def _route_decision(self, state: WorkflowState) -> str:
         """路由决策函数"""
-        query_type = state["query_type"]
+        query_type = state.get("query_type", QueryType.UNKNOWN)
         if query_type == QueryType.SQL and self.sql_available:
             return "sql"
         elif query_type == QueryType.RAG:
@@ -597,7 +597,7 @@ class MultiAgentWorkflow:
     def _review_decision(self, state: WorkflowState) -> str:
         """审阅决策函数"""
         # 如果审阅通过，结束流程
-        if state["review_approved"]:
+        if state.get("review_approved", False):
             return "approved"
         
         # 如果达到最大迭代次数，强制结束

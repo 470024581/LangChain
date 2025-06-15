@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     """应用程序配置设置"""
     
     # OpenRouter API配置
-    openrouter_api_key: str = Field(..., env="OPENROUTER_API_KEY")
+    openrouter_api_key: Optional[str] = Field(None, env="OPENROUTER_API_KEY")
     openrouter_api_base: str = Field("https://openrouter.ai/api/v1", env="OPENROUTER_API_BASE")
     
     # 默认模型配置
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     
     # LangSmith配置
     langchain_tracing_v2: bool = Field(False, env="LANGCHAIN_TRACING_V2")
-    langchain_api_key: Optional[str] = Field(None, env="LANGCHAIN_API_KEY")
+    langsmith_api_key: Optional[str] = Field(None, env="LANGSMITH_API_KEY")
     langchain_project: str = Field("Default", env="LANGCHAIN_PROJECT")
     langchain_endpoint: str = Field("https://api.smith.langchain.com", env="LANGCHAIN_ENDPOINT")
     

@@ -28,10 +28,16 @@ class LangSmithManager:
     def _initialize(self):
         """初始化 LangSmith 连接"""
         try:
-            if settings.langchain_tracing_v2 and settings.langchain_api_key:
+            # 检查是否有LangSmith API密钥
+            if not settings.langsmith_api_key:
+                logger.info("LangSmith API密钥未设置，跳过LangSmith初始化")
+                self._is_enabled = False
+                return
+                
+            if settings.langchain_tracing_v2 and settings.langsmith_api_key:
                 # 强制设置环境变量（临时调试）
                 os.environ["LANGCHAIN_TRACING_V2"] = "true"
-                os.environ["LANGCHAIN_API_KEY"] = settings.langchain_api_key
+                os.environ["LANGSMITH_API_KEY"] = settings.langsmith_api_key
                 os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
                 os.environ["LANGCHAIN_ENDPOINT"] = settings.langchain_endpoint
                 
@@ -40,7 +46,7 @@ class LangSmithManager:
                 # 初始化客户端
                 self.client = Client(
                     api_url=settings.langchain_endpoint,
-                    api_key=settings.langchain_api_key
+                    api_key=settings.langsmith_api_key
                 )
                 
                 # 初始化追踪器
@@ -57,9 +63,10 @@ class LangSmithManager:
                 
             else:
                 logger.info("LangSmith 未启用")
+                self._is_enabled = False
                 
         except Exception as e:
-            logger.error(f"LangSmith 初始化失败: {str(e)}")
+            logger.warning(f"LangSmith 初始化失败，将禁用追踪: {str(e)}")
             self._is_enabled = False
     
     def _test_connection(self):

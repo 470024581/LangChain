@@ -73,25 +73,32 @@ class DocumentQAAgent:
         logger.info("DocumentQAAgent 初始化完成")
     
     def _get_retriever(self) -> BaseRetriever:
-        """获取带有Rerank功能的检索器"""
-        from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
-        
+        """获取检索器，优先使用Rerank功能，失败时降级到基础检索器"""
         if not self.vector_store_manager.vector_store:
             self.vector_store_manager.get_or_create_vector_store()
         
         base_retriever = self.vector_store_manager.get_retriever(k=self.retriever_k)
         
-        # 初始化FlashrankRerank
-        reranker = FlashrankRerank(model=settings.reranker_model, top_n=3)
-        
-        # 创建带有上下文压缩的检索器
-        compression_retriever = ContextualCompressionRetriever(
-            base_compressor=reranker, 
-            base_retriever=base_retriever
-        )
-        
-        logger.info("已创建带有CrossEncoder Rerank功能的压缩检索器")
-        return compression_retriever
+        # 尝试使用FlashrankRerank，失败时降级到基础检索器
+        try:
+            from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
+            
+            # 初始化FlashrankRerank
+            reranker = FlashrankRerank(model=settings.reranker_model, top_n=3)
+            
+            # 创建带有上下文压缩的检索器
+            compression_retriever = ContextualCompressionRetriever(
+                base_compressor=reranker, 
+                base_retriever=base_retriever
+            )
+            
+            logger.info("已创建带有FlashrankRerank功能的压缩检索器")
+            return compression_retriever
+            
+        except Exception as e:
+            logger.warning(f"FlashrankRerank初始化失败: {e}")
+            logger.info("降级使用基础检索器")
+            return base_retriever
     
     def _create_tools(self) -> List[Tool]:
         """创建Agent工具"""

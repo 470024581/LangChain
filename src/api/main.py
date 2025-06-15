@@ -417,13 +417,13 @@ async def debug_config():
                 "langchain_tracing_v2": settings.langchain_tracing_v2,
                 "langchain_project": settings.langchain_project,
                 "langchain_endpoint": settings.langchain_endpoint,
-                "langchain_api_key": settings.langchain_api_key[:10] + "..." if settings.langchain_api_key else None
+                "langsmith_api_key": settings.langsmith_api_key[:10] + "..." if settings.langsmith_api_key else None
             },
             "environment_variables": {
                 "LANGCHAIN_TRACING_V2": os.getenv("LANGCHAIN_TRACING_V2"),
                 "LANGCHAIN_PROJECT": os.getenv("LANGCHAIN_PROJECT"), 
                 "LANGCHAIN_ENDPOINT": os.getenv("LANGCHAIN_ENDPOINT"),
-                "LANGCHAIN_API_KEY": os.getenv("LANGCHAIN_API_KEY")[:10] + "..." if os.getenv("LANGCHAIN_API_KEY") else None
+                "LANGSMITH_API_KEY": os.getenv("LANGSMITH_API_KEY")[:10] + "..." if os.getenv("LANGSMITH_API_KEY") else None
             }
         }
     except Exception as e:
