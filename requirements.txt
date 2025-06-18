@@ -28,4 +28,5 @@ flashrank>=0.2.10
 aiofiles>=23.2.0
 watchdog>=4.0.0
 mcp>=1.4.2
+langchain-mcp-adapters>=0.1.7
 

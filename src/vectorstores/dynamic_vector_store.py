@@ -59,9 +59,16 @@ class DynamicVectorStoreManager(VectorStoreManager):
         """初始化动态向量存储"""
         logger.info("初始化动态向量存储...")
         
-        # 初始化MCP
+        # 初始化LangChain MCP
         if self.mcp_manager:
-            await self.mcp_manager.initialize()
+            success = await self.mcp_manager.initialize()
+            if success:
+                logger.info("LangChain MCP文件系统服务初始化成功")
+                # 获取可用的MCP工具
+                tools = await self.mcp_manager.get_tools()
+                logger.info(f"可用的LangChain MCP工具: {[tool.name for tool in tools]}")
+            else:
+                logger.warning("LangChain MCP文件系统服务初始化失败")
         
         # 检查是否需要自动重建向量存储
         if settings.auto_rebuild_vector_store:
