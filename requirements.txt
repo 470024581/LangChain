@@ -25,4 +25,7 @@ transformers>=4.46.0
 torch>=2.1.0
 numpy>=1.24.0 
 flashrank>=0.2.10
-aiofiles
+aiofiles>=23.2.0
+watchdog>=4.0.0
+mcp>=1.4.2
+

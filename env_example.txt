@@ -1,42 +1,69 @@
-# OpenRouter API配置
+# OpenRouter API Configuration
 OPENROUTER_API_KEY=your_openrouter_api_key_here
 OPENROUTER_API_BASE=https://openrouter.ai/api/v1
 
-# 默认模型配置
+# Default Model Configuration
 DEFAULT_MODEL=gpt-4o-mini
 
-# LLM参数配置
+# LLM Parameter Configuration
 OPENAI_TEMPERATURE=0.1
 OPENAI_MAX_TOKENS=2000
 OPENAI_TOP_P=1.0
 OPENAI_FREQUENCY_PENALTY=0.0
 OPENAI_PRESENCE_PENALTY=0.0
 
-# 向量数据库配置
+# Vector Database Configuration
 VECTOR_STORE_PATH=./vector_store
 
-# API服务配置
+# API Service Configuration
 API_HOST=0.0.0.0
 API_PORT=8000
 
-# 文档处理配置
+# Document Processing Configuration
 CHUNK_SIZE=1000
 CHUNK_OVERLAP=200
 
-# 数据目录
+# Data Directory
 DATA_DIRECTORY=./data
+# Document directory list (supports multiple directories, separated by commas)
+DOCUMENT_DIRECTORIES=./data/document,./data/csv
+# Vector store monitoring directory (for file monitoring)
+VECTOR_WATCH_DIRECTORY=./data
 
-# 检索配置
+# Retrieval Configuration
 RETRIEVER_K=4
 SEARCH_TYPE=similarity
 
-# 记忆配置
+# Memory Configuration
 MEMORY_TYPE=buffer_window
 MEMORY_K=5
 MAX_TOKEN_LIMIT=2000
 
-# LangSmith配置（可选）
+# LangSmith Configuration (Optional)
 # LANGCHAIN_TRACING_V2=true
 # LANGCHAIN_API_KEY=your_langsmith_api_key_here
 # LANGCHAIN_PROJECT=your_project_name
-# LANGCHAIN_ENDPOINT=https://api.smith.langchain.com 
+# LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
+
+# MCP Service Configuration
+MCP_ENABLED=true
+MCP_FILESYSTEM_ENABLED=true
+
+# Filesystem MCP Configuration
+MCP_FILESYSTEM_ALLOWED_DIRECTORIES=["./data", "./vector_store", "./"]
+
+# ===== Dynamic Vector Store Configuration =====
+# Whether to enable dynamic vector store by default (enabled by default)
+ENABLE_DYNAMIC_VECTOR_STORE=true
+
+# Whether to enable file monitoring (based on watchdog)
+ENABLE_FILE_WATCHING=true
+
+# File monitoring delay (seconds)
+FILE_WATCH_DELAY=1.0
+
+# Whether to automatically sync filesystem changes
+AUTO_SYNC_FILESYSTEM=true
+
+# Auto rebuild vector store on startup (true/false)
+AUTO_REBUILD_VECTOR_STORE=false 

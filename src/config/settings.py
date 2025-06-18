@@ -1,6 +1,6 @@
 import os
-from typing import Optional
-from pydantic import Field
+from typing import Optional, List
+from pydantic import Field, computed_field
 from pydantic_settings import BaseSettings
 
 
@@ -39,11 +39,17 @@ class Settings(BaseSettings):
     chunk_size: int = Field(1000, env="CHUNK_SIZE")
     chunk_overlap: int = Field(200, env="CHUNK_OVERLAP")
     
-    # 数据目录
-    data_directory: str = Field("./data/document", env="DATA_DIRECTORY")
+    # 数据目录配置
+    data_directory: str = Field("./data", env="DATA_DIRECTORY")
+    # 文档目录配置（内部字段，用于解析）
+    document_directories_str: str = Field("./data/document", env="DOCUMENT_DIRECTORIES")
+    # MCP目录配置（内部字段，用于解析）
+    mcp_directories_str: str = Field("./data,./vector_store,./", env="MCP_FILESYSTEM_ALLOWED_DIRECTORIES")
+    # 向量存储监控目录（用于文件监控）
+    vector_watch_directory: str = Field("./data", env="VECTOR_WATCH_DIRECTORY")
     
     # 检索配置
-    retriever_k: int = Field(4, env="RETRIEVER_K")
+    retriever_k: int = Field(5, env="RETRIEVER_K")
     search_type: str = Field("similarity", env="SEARCH_TYPE")
     
     # 记忆配置
@@ -63,11 +69,36 @@ class Settings(BaseSettings):
     # Reranker模型
     reranker_model: str = Field("BAAI/bge-reranker-base", env="RERANKER_MODEL")
     
+    # MCP 配置
+    mcp_enabled: bool = Field(True, env="MCP_ENABLED")
+    mcp_filesystem_enabled: bool = Field(True, env="MCP_FILESYSTEM_ENABLED")
+    
+    # 动态向量存储配置 - 默认启用
+    enable_dynamic_vector_store: bool = Field(True, env="ENABLE_DYNAMIC_VECTOR_STORE")
+    enable_file_watching: bool = Field(True, env="ENABLE_FILE_WATCHING")
+    auto_sync_filesystem: bool = Field(True, env="AUTO_SYNC_FILESYSTEM")
+    file_watch_delay: float = Field(1.0, env="FILE_WATCH_DELAY")
+    
+    # 启动时自动重建向量存储
+    auto_rebuild_vector_store: bool = Field(False, env="AUTO_REBUILD_VECTOR_STORE")
+    
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "extra": "ignore"  # 忽略额外的字段，提高兼容性
     }
+    
+    @computed_field
+    @property
+    def document_directories(self) -> List[str]:
+        """获取文档目录列表"""
+        return [dir.strip() for dir in self.document_directories_str.split(',') if dir.strip()]
+    
+    @computed_field
+    @property
+    def mcp_filesystem_allowed_directories(self) -> List[str]:
+        """获取MCP允许目录列表"""
+        return [dir.strip() for dir in self.mcp_directories_str.split(',') if dir.strip()]
 
 
 # 全局配置实例

@@ -194,3 +194,4 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 .langgraph_api
+node_modules

@@ -77,6 +77,12 @@ def main():
     chat_parser.add_argument("--conversational", action="store_true", help="使用对话式检索")
     chat_parser.add_argument("--use-agent", action="store_true", help="使用Agent架构而非Chain架构")
     chat_parser.add_argument("--use-workflow", action="store_true", help="使用多智能体工作流(LangGraph)")
+    # 动态向量存储默认启用，只提供禁用选项
+    chat_parser.add_argument(
+        "--no-dynamic", 
+        action="store_true", 
+        help="禁用动态向量存储，使用传统静态模式"
+    )
     
     # 服务器模式
     server_parser = subparsers.add_parser("server", help="启动API服务器")
@@ -373,9 +379,45 @@ def handle_chat_command(args):
         from src.agents.rag_agent import DocumentQAAgent, ConversationalRetrievalAgent
         from src.agents.sql_agent import SQLAgent
         
-        # 初始化向量存储
-        vector_manager = VectorStoreManager(use_openai_embeddings=False)
-        vector_manager.get_or_create_vector_store()
+        # 检查是否使用动态向量存储 (默认启用，除非明确禁用)
+        use_dynamic = settings.enable_dynamic_vector_store and not getattr(args, 'no_dynamic', False)
+        
+        if use_dynamic:
+            # 使用动态向量存储管理器
+            from src.vectorstores.dynamic_vector_store import DynamicVectorStoreManager
+            
+            # 从配置文件读取设置
+            enable_watching = settings.enable_file_watching
+            enable_mcp = settings.mcp_enabled and settings.mcp_filesystem_enabled
+            
+            vector_manager = DynamicVectorStoreManager(
+                use_openai_embeddings=False,
+                enable_file_watching=enable_watching,
+                enable_mcp=enable_mcp
+            )
+            
+            print(f"🔄 动态向量存储模式 - 文件监控: {'开启' if enable_watching else '关闭'}, MCP: {'开启' if enable_mcp else '关闭'}")
+            
+            # 异步初始化动态向量存储
+            import asyncio
+            
+            async def init_dynamic_vector_store():
+                return await vector_manager.initialize()
+            
+            vector_store = asyncio.run(init_dynamic_vector_store())
+            
+            # 显示状态
+            status = vector_manager.get_status()
+            print(f"📊 动态向量存储状态:")
+            print(f"   - 跟踪文件数: {status['tracked_files_count']}")
+            print(f"   - 文件监控: {'运行中' if status['file_watcher_running'] else '未运行'}")
+            print(f"   - MCP可用: {'是' if status['mcp_available'] else '否'}")
+            
+        else:
+            # 使用标准向量存储管理器
+            vector_manager = VectorStoreManager(use_openai_embeddings=False)
+            vector_manager.get_or_create_vector_store()
+            print("📚 标准向量存储模式")
         
         # 初始化问答系统（Chain或Agent）
         if args.use_agent:
@@ -448,6 +490,9 @@ def handle_chat_command(args):
             print("输入 'sql:' 前缀进行SQL查询")
             print("输入 'mode doc' 切换到文档问答模式")
             print("输入 'mode sql' 切换到SQL查询模式")
+        print("输入 'status' 查看向量存储状态")
+        print("输入 'sync' 强制同步文件系统")
+        print("输入 'files' 查看跟踪的文件列表")
         print("=" * 50)
         
         session_id = args.session
@@ -493,6 +538,45 @@ def handle_chat_command(args):
                     else:
                         print("SQL Agent不可用")
                     continue
+                
+                # 向量存储管理命令（动态模式下可用）
+                if use_dynamic:
+                    if question.lower() == 'status':
+                        status = vector_manager.get_status()
+                        print("\n📊 动态向量存储状态:")
+                        print(f"   - 文件监控: {'开启' if status['file_watching_enabled'] else '关闭'}")
+                        print(f"   - MCP支持: {'开启' if status['mcp_enabled'] else '关闭'}")
+                        print(f"   - MCP可用: {'是' if status['mcp_available'] else '否'}")
+                        print(f"   - 文件监控运行: {'是' if status['file_watcher_running'] else '否'}")
+                        print(f"   - 跟踪文件数: {status['tracked_files_count']}")
+                        print(f"   - 处理中文件数: {status['processing_files_count']}")
+                        print(f"   - 最后同步时间: {status['last_sync_time']}")
+                        continue
+                    
+                    if question.lower() == 'sync':
+                        print("🔄 开始强制同步文件系统...")
+                        
+                        async def sync_filesystem():
+                            await vector_manager.force_sync_with_filesystem()
+                        
+                        asyncio.run(sync_filesystem())
+                        print("✅ 文件系统同步完成")
+                        continue
+                    
+                    if question.lower() == 'files':
+                        mapping = vector_manager.get_file_document_mapping()
+                        processing = vector_manager.get_processing_files()
+                        
+                        print(f"\n📁 跟踪的文件 ({len(mapping)} 个):")
+                        for file_path, doc_ids in mapping.items():
+                            status_icon = "🔄" if file_path in processing else "✅"
+                            print(f"   {status_icon} {file_path} ({len(doc_ids)} 个文档)")
+                        
+                        if processing:
+                            print(f"\n🔄 正在处理的文件 ({len(processing)} 个):")
+                            for file_path in processing:
+                                print(f"   - {file_path}")
+                        continue
                 
                 if not question:
                     continue
@@ -592,6 +676,11 @@ def handle_chat_command(args):
             except Exception as e:
                 logger.error(f"处理问题时出错: {str(e)}")
                 print(f"错误: {str(e)}")
+        
+        # 清理动态向量存储资源
+        if use_dynamic and hasattr(vector_manager, 'cleanup'):
+            print("🧹 清理动态向量存储资源...")
+            asyncio.run(vector_manager.cleanup())
                 
     except Exception as e:
         logger.error(f"初始化聊天模式失败: {str(e)}")

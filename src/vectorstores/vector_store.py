@@ -159,4 +159,72 @@ class VectorStoreManager:
             logger.info(f"已删除向量存储: {store_path}")
         
         if self.vector_store is not None:
-            self.vector_store = None 
+            self.vector_store = None
+    
+    def delete_documents_by_ids(self, ids: List[str]) -> bool:
+        """按ID删除文档"""
+        if self.vector_store is None:
+            raise ValueError("向量存储未初始化")
+        
+        try:
+            result = self.vector_store.delete(ids)
+            logger.info(f"已删除 {len(ids)} 个文档")
+            return result
+        except Exception as e:
+            logger.error(f"删除文档失败: {str(e)}")
+            raise
+    
+    def delete_documents_by_source(self, source_path: str) -> bool:
+        """按源文件路径删除相关文档"""
+        if self.vector_store is None:
+            raise ValueError("向量存储未初始化")
+        
+        # 查找该源文件的所有文档ID
+        doc_ids = []
+        for doc_id, doc in self.vector_store.docstore._dict.items():
+            if hasattr(doc, 'metadata') and doc.metadata.get('source') == source_path:
+                doc_ids.append(doc_id)
+        
+        if not doc_ids:
+            logger.warning(f"未找到源文件 {source_path} 的相关文档")
+            return False
+        
+        try:
+            result = self.vector_store.delete(doc_ids)
+            logger.info(f"已删除源文件 {source_path} 的 {len(doc_ids)} 个文档")
+            return result
+        except Exception as e:
+            logger.error(f"删除源文件文档失败: {str(e)}")
+            raise
+    
+    def get_document_ids_by_source(self, source_path: str) -> List[str]:
+        """获取指定源文件的所有文档ID"""
+        if self.vector_store is None:
+            raise ValueError("向量存储未初始化")
+        
+        doc_ids = []
+        for doc_id, doc in self.vector_store.docstore._dict.items():
+            if hasattr(doc, 'metadata') and doc.metadata.get('source') == source_path:
+                doc_ids.append(doc_id)
+        
+        return doc_ids
+    
+    def rebuild_from_directory(self, force_rebuild: bool = True) -> FAISS:
+        """重新扫描目录并重建向量存储"""
+        logger.info("重新扫描文档目录...")
+        documents = self.document_loader.load_documents_from_directory()
+        
+        if force_rebuild:
+            logger.info("强制重建向量存储...")
+            self.create_vector_store(documents)
+        else:
+            # 增量更新逻辑可以在这里实现
+            logger.info("增量更新向量存储...")
+            if self.vector_store is None:
+                self.create_vector_store(documents)
+            else:
+                # 这里需要实现增量更新的逻辑
+                # 比较现有文档和新文档，添加新的，删除不存在的
+                pass
+        
+        return self.vector_store 
