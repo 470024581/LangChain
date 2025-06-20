@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentQAChain:
-    """文档问答链 - 使用LCEL构建"""
+    """Document Q&A Chain - Built with LCEL"""
     
     def __init__(
         self,
@@ -31,63 +31,63 @@ class DocumentQAChain:
         retriever_k: int = 4
     ):
         """
-        初始化问答链
+        Initialize Q&A chain
         
         Args:
-            vector_store_manager: 向量存储管理器
-            model_name: 使用的模型名称
-            use_memory: 是否使用记忆功能
-            retriever_k: 检索器返回的文档数量
+            vector_store_manager: Vector store manager
+            model_name: Model name to use
+            use_memory: Whether to use memory function
+            retriever_k: Number of documents returned by retriever
         """
         self.vector_store_manager = vector_store_manager
         self.use_memory = use_memory
         self.retriever_k = retriever_k
         
-        # 初始化LLM和提示词管理器
+        # Initialize LLM and prompt manager
         self.llm = LLMFactory.create_llm(model_name)
         self.prompt_manager = PromptTemplateManager()
         self.memory_manager = ConversationMemoryManager() if use_memory else None
         
-        # 获取检索器
+        # Get retriever
         self.retriever = self._get_retriever()
         
-        # 构建链
+        # Build chain
         self.chain = self._build_chain()
         
-        # 配置 LangSmith 追踪
+        # Configure LangSmith tracing
         self._configure_langsmith()
         
-        logger.info(f"文档问答链初始化完成，使用模型: {model_name or 'default'}")
+        logger.info(f"Document Q&A chain initialization completed, using model: {model_name or 'default'}")
         if langsmith_manager.is_enabled:
-            logger.info("LangSmith 追踪已启用")
+            logger.info("LangSmith tracing enabled")
     
     def _get_retriever(self) -> BaseRetriever:
-        """获取带有Rerank功能的检索器"""
+        """Get retriever with Rerank functionality"""
         if not self.vector_store_manager.vector_store:
             self.vector_store_manager.get_or_create_vector_store()
         
         base_retriever = self.vector_store_manager.get_retriever(k=self.retriever_k)
         
-        # 初始化FlashrankRerank
+        # Initialize FlashrankRerank
         reranker = FlashrankRerank(model=settings.reranker_model, top_n=3)
         
-        # 创建带有上下文压缩的检索器
+        # Create retriever with contextual compression
         compression_retriever = ContextualCompressionRetriever(
             base_compressor=reranker, 
             base_retriever=base_retriever
         )
         
-        logger.info("已创建带有CrossEncoder Rerank功能的压缩检索器")
+        logger.info("Created compression retriever with CrossEncoder Rerank functionality")
         return compression_retriever
     
     def _build_chain(self) -> Runnable:
-        """构建LCEL链"""
-        # 文档格式化函数
+        """Build LCEL chain"""
+        # Document formatting function
         def format_docs(docs: List[Document]) -> str:
             return PromptFormatter.format_documents(docs)
         
         if self.use_memory:
-            # 带记忆的链
+            # Chain with memory
             prompt = self.prompt_manager.get_chat_qa_prompt()
             
             def get_chat_history(inputs: Dict[str, Any]) -> List:
@@ -97,7 +97,7 @@ class DocumentQAChain:
             def get_question(inputs: Dict[str, Any]) -> str:
                 return inputs.get("question", "")
             
-            # 构建带记忆的并行链
+            # Build parallel chain with memory
             chain = (
                 RunnableParallel({
                     "context": RunnableLambda(get_question) | self.retriever | format_docs,
@@ -109,7 +109,7 @@ class DocumentQAChain:
                 | StrOutputParser()
             )
         else:
-            # 不带记忆的简单链
+            # Simple chain without memory
             prompt = self.prompt_manager.get_qa_prompt()
             
             chain = (
@@ -125,9 +125,9 @@ class DocumentQAChain:
         return chain
     
     def _configure_langsmith(self):
-        """配置 LangSmith 追踪"""
+        """Configure LangSmith tracing"""
         if langsmith_manager.is_enabled:
-            # 为链添加 LangSmith 回调
+            # Add LangSmith callbacks to chain
             callbacks = langsmith_manager.get_callbacks()
             if callbacks:
                 self.langsmith_config = RunnableConfig(
@@ -152,26 +152,26 @@ class DocumentQAChain:
         **kwargs
     ) -> Dict[str, Any]:
         """
-        调用问答链
+        Invoke Q&A chain
         
         Args:
-            question: 用户问题
-            session_id: 会话ID（如果使用记忆）
-            **kwargs: 其他参数
+            question: User question
+            session_id: Session ID (if using memory)
+            **kwargs: Other parameters
         
         Returns:
-            包含答案和相关信息的字典
+            Dictionary containing answer and related information
         """
         try:
-            logger.info(f"处理问题: {question[:100]}...")
+            logger.info(f"Processing question: {question[:100]}...")
             
-            # 1. 获取相关文档
+            # 1. Get relevant documents
             relevant_docs = self.retriever.invoke(question)
             
-            # 2. 构建上下文
+            # 2. Build context
             context = self._format_docs(relevant_docs)
             
-            # 准备输入
+            # Prepare input
             if self.use_memory:
                 input_data = {
                     "question": question,
@@ -180,13 +180,13 @@ class DocumentQAChain:
             else:
                 input_data = question
             
-            # 调用链（如果启用 LangSmith，使用配置）
+            # Invoke chain (use config if LangSmith is enabled)
             if self.langsmith_config:
                 answer = self.chain.invoke(input_data, config=self.langsmith_config)
             else:
                 answer = self.chain.invoke(input_data)
             
-            # 保存到记忆（如果启用）
+            # Save to memory (if enabled)
             if self.use_memory and self.memory_manager:
                 self.memory_manager.add_message_pair(
                     user_message=question,
@@ -207,13 +207,13 @@ class DocumentQAChain:
                 "session_id": session_id if self.use_memory else None
             }
             
-            logger.info("问答处理完成")
+            logger.info("Q&A processing completed")
             return result
             
         except Exception as e:
-            logger.error(f"问答处理失败: {str(e)}")
+            logger.error(f"Q&A processing failed: {str(e)}")
             return {
-                "answer": f"抱歉，处理您的问题时出现错误: {str(e)}",
+                "answer": f"Sorry, an error occurred while processing your question: {str(e)}",
                 "question": question,
                 "relevant_documents": [],
                 "session_id": session_id if self.use_memory else None,
@@ -227,20 +227,20 @@ class DocumentQAChain:
         **kwargs
     ):
         """
-        流式调用问答链
+        Stream invoke Q&A chain
         
         Args:
-            question: 用户问题
-            session_id: 会话ID
-            **kwargs: 其他参数
+            question: User question
+            session_id: Session ID
+            **kwargs: Other parameters
         
         Yields:
-            答案的流式片段
+            Streaming answer fragments
         """
         try:
-            logger.info(f"流式处理问题: {question[:100]}...")
+            logger.info(f"Stream processing question: {question[:100]}...")
             
-            # 准备输入
+            # Prepare input
             if self.use_memory:
                 input_data = {
                     "question": question,
@@ -249,13 +249,13 @@ class DocumentQAChain:
             else:
                 input_data = question
             
-            # 流式调用链
+            # Stream invoke chain
             full_answer = ""
             for chunk in self.chain.stream(input_data):
                 full_answer += chunk
                 yield chunk
             
-            # 保存到记忆（如果启用）
+            # Save to memory (if enabled)
             if self.use_memory and self.memory_manager:
                 self.memory_manager.add_message_pair(
                     user_message=question,
@@ -264,32 +264,32 @@ class DocumentQAChain:
                 )
             
         except Exception as e:
-            logger.error(f"流式问答处理失败: {str(e)}")
-            yield f"抱歉，处理您的问题时出现错误: {str(e)}"
+            logger.error(f"Stream Q&A processing failed: {str(e)}")
+            yield f"Sorry, an error occurred while processing your question: {str(e)}"
     
     def get_relevant_documents(self, question: str) -> List[Document]:
-        """获取与问题相关的文档"""
-        logger.info(f"正在为问题检索相关文档: {question[:100]}...")
+        """Get documents relevant to the question"""
+        logger.info(f"Retrieving relevant documents for question: {question[:100]}...")
         return self.retriever.invoke(question)
     
     def clear_memory(self, session_id: str = "default") -> None:
-        """清空指定会话的记忆"""
+        """Clear memory for specified session"""
         if self.use_memory and self.memory_manager:
             self.memory_manager.clear_memory(session_id)
-            logger.info(f"已清空会话 {session_id} 的记忆")
+            logger.info(f"Cleared memory for session {session_id}")
     
     def get_memory_stats(self, session_id: str = "default") -> Dict[str, Any]:
-        """获取记忆统计信息"""
+        """Get memory statistics"""
         if self.use_memory and self.memory_manager:
             return self.memory_manager.get_memory_stats(session_id)
         return {}
     
     def update_retriever_k(self, k: int) -> None:
-        """更新检索器返回的文档数量"""
+        """Update number of documents returned by retriever"""
         self.retriever_k = k
         self.retriever = self._get_retriever()
         self.chain = self._build_chain()
-        logger.info(f"检索器文档数量更新为: {k}")
+        logger.info(f"Retriever document count updated to: {k}")
 
     def _format_docs(self, docs: List[Document]) -> str:
         # Implementation of _format_docs method
@@ -300,7 +300,7 @@ class DocumentQAChain:
 
 
 class ConversationalRetrievalChain:
-    """对话式检索问答链"""
+    """Conversational retrieval Q&A chain"""
     
     def __init__(
         self,
@@ -309,33 +309,33 @@ class ConversationalRetrievalChain:
         retriever_k: int = 4
     ):
         """
-        初始化对话式检索链
+        Initialize conversational retrieval chain
         
         Args:
-            vector_store_manager: 向量存储管理器
-            model_name: 使用的模型名称
-            retriever_k: 检索器返回的文档数量
+            vector_store_manager: Vector store manager
+            model_name: Model name to use
+            retriever_k: Number of documents returned by retriever
         """
         self.vector_store_manager = vector_store_manager
         self.model_name = model_name
         self.retriever_k = retriever_k
         
-        # 初始化LLM和提示词管理器
+        # Initialize LLM and prompt manager
         self.llm = LLMFactory.create_llm(model_name)
         self.prompt_manager = PromptTemplateManager()
         self.memory_manager = ConversationMemoryManager()
         
-        # 获取检索器
+        # Get retriever
         self.retriever = self._get_retriever()
         
-        # 构建链
+        # Build chains
         self.standalone_question_chain = self._build_standalone_question_chain()
         self.qa_chain = self._build_qa_chain()
         
-        logger.info("对话式检索问答链初始化完成")
+        logger.info("Conversational retrieval Q&A chain initialization completed")
     
     def _get_retriever(self) -> BaseRetriever:
-        """获取带有Rerank功能的检索器"""
+        """Get retriever with Rerank functionality"""
         from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
         
         if not self.vector_store_manager.vector_store:
@@ -343,20 +343,20 @@ class ConversationalRetrievalChain:
         
         base_retriever = self.vector_store_manager.get_retriever(k=self.retriever_k)
         
-        # 初始化FlashrankRerank
+        # Initialize FlashrankRerank
         reranker = FlashrankRerank(model=settings.reranker_model, top_n=3)
         
-        # 创建带有上下文压缩的检索器
+        # Create compression retriever with contextual compression
         compression_retriever = ContextualCompressionRetriever(
             base_compressor=reranker, 
             base_retriever=base_retriever
         )
         
-        logger.info("已创建带有CrossEncoder Rerank功能的压缩检索器")
+        logger.info("Created compression retriever with CrossEncoder Rerank functionality")
         return compression_retriever
     
     def _build_standalone_question_chain(self) -> Runnable:
-        """构建独立问题生成链"""
+        """Build standalone question generation chain"""
         prompt = self.prompt_manager.get_standalone_question_prompt()
         
         def format_chat_history(inputs: Dict[str, Any]) -> str:
@@ -374,7 +374,7 @@ class ConversationalRetrievalChain:
         )
     
     def _build_qa_chain(self) -> Runnable:
-        """构建问答链"""
+        """Build Q&A chain"""
         prompt = self.prompt_manager.get_qa_prompt()
         
         def format_docs(docs: List[Document]) -> str:
@@ -397,34 +397,34 @@ class ConversationalRetrievalChain:
         **kwargs
     ) -> Dict[str, Any]:
         """
-        调用对话式检索问答链
+        Invoke conversational retrieval Q&A chain
         
         Args:
-            question: 用户问题
-            session_id: 会话ID
-            **kwargs: 其他参数
+            question: User question
+            session_id: Session ID
+            **kwargs: Other parameters
         
         Returns:
-            包含答案和相关信息的字典
+            Dictionary containing answer and related information
         """
         try:
-            logger.info(f"对话式处理问题: {question[:100]}...")
+            logger.info(f"Conversational processing question: {question[:100]}...")
             
-            # 1. 生成独立问题
+            # 1. Generate standalone question
             standalone_question = self.standalone_question_chain.invoke({
                 "question": question,
                 "session_id": session_id
             })
             
-            logger.debug(f"独立问题: {standalone_question}")
+            logger.debug(f"Standalone question: {standalone_question}")
             
-            # 2. 使用独立问题进行问答
+            # 2. Use standalone question for Q&A
             answer = self.qa_chain.invoke(standalone_question)
             
-            # 3. 获取相关文档
+            # 3. Get relevant documents
             relevant_docs = self.retriever.invoke(standalone_question)
             
-            # 4. 保存到记忆
+            # 4. Save to memory
             self.memory_manager.add_message_pair(
                 user_message=question,
                 ai_message=answer,
@@ -445,13 +445,13 @@ class ConversationalRetrievalChain:
                 "session_id": session_id
             }
             
-            logger.info("对话式问答处理完成")
+            logger.info("Conversational Q&A processing completed")
             return result
             
         except Exception as e:
-            logger.error(f"对话式问答处理失败: {str(e)}")
+            logger.error(f"Conversational Q&A processing failed: {str(e)}")
             return {
-                "answer": f"抱歉，处理您的问题时出现错误: {str(e)}",
+                "answer": f"Sorry, an error occurred while processing your question: {str(e)}",
                 "question": question,
                 "relevant_documents": [],
                 "session_id": session_id,
@@ -459,7 +459,7 @@ class ConversationalRetrievalChain:
             }
 
     def _get_standalone_question(self, question: str, chat_history: list) -> str:
-        """根据对话历史，生成一个独立的、无须上下文就能理解的问题。"""
+        """Generate a standalone question that can be understood without context based on conversation history."""
         if not chat_history:
             return question
 
@@ -471,26 +471,26 @@ class ConversationalRetrievalChain:
         return result
 
     def _get_standalone_question_chain(self):
-        # 1. 获取相关文档
+        # 1. Get relevant documents
         relevant_docs = self.retriever.invoke(question)
 
-        # 2. 构建上下文
+        # 2. Build context
         context = self._format_docs(relevant_docs)
 
-        # 3. 生成独立问题
+        # 3. Generate standalone question
         standalone_question = self._get_standalone_question(question, chat_history)
 
-        # 4. 获取相关文档
+        # 4. Get relevant documents
         relevant_docs = self.retriever.invoke(standalone_question)
 
-        # 5. 构建上下文
+        # 5. Build context
         context = self._format_docs(relevant_docs)
 
         return standalone_question
 
     def get_relevant_documents(self, question: str) -> List[Document]:
-        """获取与问题相关的文档"""
-        logger.info(f"正在为问题检索相关文档: {question[:100]}...")
+        """Get documents relevant to the question"""
+        logger.info(f"Retrieving relevant documents for question: {question[:100]}...")
         return self.retriever.invoke(question)
 
     def _format_docs(self, docs: List[Document]) -> str:

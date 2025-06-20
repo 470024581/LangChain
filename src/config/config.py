@@ -1,11 +1,11 @@
 """
-兼容的配置模块，提供嵌套访问支持
+Compatible configuration module providing nested access support
 """
 from .settings import settings
 
 
 class OpenRouterConfig:
-    """OpenRouter配置类"""
+    """OpenRouter configuration class"""
     
     @property
     def model_name(self):
@@ -21,15 +21,15 @@ class OpenRouterConfig:
 
 
 class Config:
-    """配置类，提供嵌套访问"""
+    """Configuration class providing nested access"""
     
     def __init__(self):
         self.openrouter = OpenRouterConfig()
     
-    # 直接访问settings的属性
+    # Direct access to settings attributes
     def __getattr__(self, name):
         return getattr(settings, name)
 
 
-# 全局配置实例
+# Global configuration instance
 config = Config() 

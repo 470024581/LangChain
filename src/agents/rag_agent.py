@@ -1,8 +1,8 @@
 """
-基于Agent的RAG (Retrieval-Augmented Generation) 实现
+Agent-based RAG (Retrieval-Augmented Generation) Implementation
 
-这个模块实现了使用LangChain内置Agent的RAG系统，
-与现有的Chain版本保持相同的逻辑和接口。
+This module implements a RAG system using LangChain's built-in Agent,
+maintaining the same logic and interface as the existing Chain version.
 """
 
 import logging
@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 
 class DocumentQAAgent:
     """
-    基于Agent的文档问答系统
+    Agent-based Document Q&A System
     
-    这个类实现了与DocumentQAChain相同的功能，但使用LangChain的Agent框架。
+    This class implements the same functionality as DocumentQAChain, but uses LangChain's Agent framework.
     """
     
     def __init__(
@@ -43,89 +43,89 @@ class DocumentQAAgent:
         retriever_k: int = 4
     ):
         """
-        初始化Agent
+        Initialize Agent
         
         Args:
-            vector_store_manager: 向量存储管理器
-            model_name: 模型名称
-            use_memory: 是否使用记忆
-            retriever_k: 检索器返回的文档数量
+            vector_store_manager: Vector store manager
+            model_name: Model name
+            use_memory: Whether to use memory
+            retriever_k: Number of documents returned by retriever
         """
         self.vector_store_manager = vector_store_manager
         self.model_name = model_name
         self.use_memory = use_memory
         self.retriever_k = retriever_k
         
-        # 初始化组件
+        # Initialize components
         self.llm = LLMFactory.create_llm(model_name)
         self.prompt_manager = PromptTemplateManager()
         self.memory_manager = ConversationMemoryManager() if use_memory else None
         
-        # 初始化检索器
+        # Initialize retriever
         self.retriever = self._get_retriever()
         
-        # 构建Agent
+        # Build Agent
         self.agent_executor = self._build_agent()
         
-        # 配置LangSmith
+        # Configure LangSmith
         self._configure_langsmith()
         
-        logger.info("DocumentQAAgent 初始化完成")
+        logger.info("DocumentQAAgent initialization completed")
     
     def _get_retriever(self) -> BaseRetriever:
-        """获取检索器，优先使用Rerank功能，失败时降级到基础检索器"""
+        """Get retriever, prioritize Rerank functionality, fallback to basic retriever on failure"""
         if not self.vector_store_manager.vector_store:
             self.vector_store_manager.get_or_create_vector_store()
         
         base_retriever = self.vector_store_manager.get_retriever(k=self.retriever_k)
         
-        # 尝试使用FlashrankRerank，失败时降级到基础检索器
+        # Try to use FlashrankRerank, fallback to basic retriever on failure
         try:
             from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
             
-            # 初始化FlashrankRerank
+            # Initialize FlashrankRerank
             reranker = FlashrankRerank(model=settings.reranker_model, top_n=3)
             
-            # 创建带有上下文压缩的检索器
+            # Create retriever with contextual compression
             compression_retriever = ContextualCompressionRetriever(
                 base_compressor=reranker, 
                 base_retriever=base_retriever
             )
             
-            logger.info("已创建带有FlashrankRerank功能的压缩检索器")
+            logger.info("Created compression retriever with FlashrankRerank functionality")
             return compression_retriever
             
         except Exception as e:
-            logger.warning(f"FlashrankRerank初始化失败: {e}")
-            logger.info("降级使用基础检索器")
+            logger.warning(f"FlashrankRerank initialization failed: {e}")
+            logger.info("Falling back to basic retriever")
             return base_retriever
     
     def _create_tools(self) -> List[Tool]:
-        """创建Agent工具"""
+        """Create Agent tools"""
         tools = [
             Tool(
                 name="document_retrieval",
-                description="搜索并检索与问题相关的文档内容。用于回答需要基于文档知识的问题。",
+                description="Search and retrieve document content related to the question. Used to answer questions that require document-based knowledge.",
                 func=self.retriever.invoke
             )
         ]
         return tools
     
     def _build_agent(self) -> AgentExecutor:
-        """构建Agent执行器"""
+        """Build Agent executor"""
         tools = self._create_tools()
         
-        # 使用简单的系统消息而不是复杂的提示模板
-        system_message = """你是一个智能文档问答助手。你需要基于检索到的文档内容来回答用户问题。
+        # Use simple system message instead of complex prompt template
+        system_message = """You are an intelligent document Q&A assistant. You need to answer user questions based on retrieved document content.
 
-工作流程：
-1. 使用 document_retrieval 工具一次来搜索相关文档。
-2. 分析检索到的文档内容，并基于此生成最终答案。
+Workflow:
+1. Use the document_retrieval tool once to search for relevant documents.
+2. Analyze the retrieved document content and generate the final answer based on it.
 
-**非常重要**: 如果你决定使用工具，你的回答**必须**只包含工具调用的JSON，不要有任何其他文字。一旦获得工具返回的信息，再组织语言回答问题。如果文档中没有相关信息，请明确说明。
+**Very Important**: If you decide to use tools, your response **must** only contain the tool call JSON, without any other text. Once you get the information returned by the tool, then organize the language to answer the question. If there is no relevant information in the documents, please state clearly.
 """
 
-        # 创建提示模板，让LangChain自动处理工具部分
+        # Create prompt template, let LangChain automatically handle the tool part
         if self.use_memory:
             prompt = ChatPromptTemplate.from_messages([
                 ("system", system_message),
@@ -140,27 +140,27 @@ class DocumentQAAgent:
                 MessagesPlaceholder(variable_name="agent_scratchpad")
             ])
         
-        # 创建tool-calling agent
+        # Create tool-calling agent
         agent = create_tool_calling_agent(
             llm=self.llm,
             tools=tools,
             prompt=prompt
         )
         
-        # 创建Agent执行器
+        # Create Agent executor
         agent_executor = AgentExecutor(
             agent=agent,
             tools=tools,
             verbose=True,
             max_iterations=3,
             handle_parsing_errors=True,
-            return_intermediate_steps=True, # 确保返回中间步骤
+            return_intermediate_steps=True, # Ensure intermediate steps are returned
         )
         
         return agent_executor
     
     def _configure_langsmith(self):
-        """配置 LangSmith 追踪"""
+        """Configure LangSmith tracing"""
         if langsmith_manager.is_enabled:
             callbacks = langsmith_manager.get_callbacks()
             if callbacks:
@@ -179,11 +179,11 @@ class DocumentQAAgent:
             self.langsmith_config = None
     
     def _prepare_input(self, question: str, session_id: str = "default") -> Dict[str, Any]:
-        """准备Agent输入"""
+        """Prepare Agent input"""
         input_data = {"input": question}
         
         if self.use_memory and self.memory_manager:
-            # 添加聊天历史
+            # Add chat history
             chat_history = self.memory_manager.get_chat_history(session_id)
             input_data["chat_history"] = chat_history
         
@@ -197,23 +197,23 @@ class DocumentQAAgent:
         **kwargs
     ) -> Dict[str, Any]:
         """
-        调用问答Agent
+        Invoke Q&A Agent
         
         Args:
-            question: 用户问题
-            session_id: 会话ID（如果使用记忆）
-            **kwargs: 其他参数
+            question: User question
+            session_id: Session ID (if using memory)
+            **kwargs: Other parameters
         
         Returns:
-            包含答案和相关信息的字典
+            Dictionary containing answer and related information
         """
         try:
-            logger.info(f"Agent处理问题: {question[:100]}...")
+            logger.info(f"Agent processing question: {question[:100]}...")
             
-            # 准备输入
+            # Prepare input
             input_data = self._prepare_input(question, session_id)
             
-            # 调用Agent（如果启用 LangSmith，使用配置）
+            # Invoke Agent (use config if LangSmith is enabled)
             if self.langsmith_config:
                 result = self.agent_executor.invoke(input_data, config=self.langsmith_config)
             else:
@@ -221,19 +221,19 @@ class DocumentQAAgent:
             
             answer = result.get("output", "")
             
-            # 从中间步骤中提取相关文档
+            # Extract relevant documents from intermediate steps
             relevant_docs = []
             if "intermediate_steps" in result:
                 for action, observation in result["intermediate_steps"]:
                     if action.tool == "document_retrieval" and isinstance(observation, list):
                         relevant_docs.extend(doc for doc in observation if isinstance(doc, Document))
 
-            # 如果没有从中间步骤找到，作为后备方案再检索一次
+            # If no documents found from intermediate steps, perform fallback retrieval
             if not relevant_docs and question:
-                logger.warning("无法从Agent中间步骤提取文档，执行后备检索。")
+                logger.warning("Unable to extract documents from Agent intermediate steps, performing fallback retrieval.")
                 relevant_docs = self.retriever.invoke(question)
             
-            # 保存到记忆（如果启用）
+            # Save to memory (if enabled)
             if self.use_memory and self.memory_manager:
                 self.memory_manager.add_message_pair(
                     user_message=question,
@@ -255,13 +255,13 @@ class DocumentQAAgent:
                 "intermediate_steps": result.get("intermediate_steps", [])
             }
             
-            logger.info("Agent问答处理完成")
+            logger.info("Agent Q&A processing completed")
             return response
             
         except Exception as e:
-            logger.error(f"Agent问答处理失败: {str(e)}")
+            logger.error(f"Agent Q&A processing failed: {str(e)}")
             return {
-                "answer": f"抱歉，处理您的问题时出现错误: {str(e)}",
+                "answer": f"Sorry, an error occurred while processing your question: {str(e)}",
                 "question": question,
                 "relevant_documents": [],
                 "session_id": session_id if self.use_memory else None,
@@ -275,23 +275,23 @@ class DocumentQAAgent:
         **kwargs
     ) -> Dict[str, Any]:
         """
-        异步调用问答Agent
+        Asynchronously invoke Q&A Agent
         
         Args:
-            question: 用户问题
-            session_id: 会话ID
-            **kwargs: 其他参数
+            question: User question
+            session_id: Session ID
+            **kwargs: Other parameters
         
         Returns:
-            包含答案和相关信息的字典
+            Dictionary containing answer and related information
         """
         try:
-            logger.info(f"Agent异步处理问题: {question[:100]}...")
+            logger.info(f"Agent async processing question: {question[:100]}...")
             
-            # 准备输入
+            # Prepare input
             input_data = self._prepare_input(question, session_id)
             
-            # 异步调用Agent
+            # Async invoke Agent
             if self.langsmith_config:
                 result = await self.agent_executor.ainvoke(input_data, config=self.langsmith_config)
             else:
@@ -299,7 +299,7 @@ class DocumentQAAgent:
             
             answer = result.get("output", "")
             
-            # 异步地从中间步骤提取文档
+            # Async extract documents from intermediate steps
             relevant_docs = []
             if "intermediate_steps" in result:
                 for action, observation in result["intermediate_steps"]:
@@ -307,10 +307,10 @@ class DocumentQAAgent:
                         relevant_docs.extend(doc for doc in observation if isinstance(doc, Document))
             
             if not relevant_docs and question:
-                logger.warning("无法从Agent中间步骤提取文档，执行后备检索。")
+                logger.warning("Unable to extract documents from Agent intermediate steps, performing fallback retrieval.")
                 relevant_docs = await self.retriever.ainvoke(question)
 
-            # 保存到记忆（如果启用）
+            # Save to memory (if enabled)
             if self.use_memory and self.memory_manager:
                 self.memory_manager.add_message_pair(
                     user_message=question,
@@ -332,13 +332,13 @@ class DocumentQAAgent:
                 "intermediate_steps": result.get("intermediate_steps", [])
             }
             
-            logger.info("Agent异步问答处理完成")
+            logger.info("Agent async Q&A processing completed")
             return response
             
         except Exception as e:
-            logger.error(f"Agent异步问答处理失败: {str(e)}")
+            logger.error(f"Agent async Q&A processing failed: {str(e)}")
             return {
-                "answer": f"抱歉，处理您的问题时出现错误: {str(e)}",
+                "answer": f"Sorry, an error occurred while processing your question: {str(e)}",
                 "question": question,
                 "relevant_documents": [],
                 "session_id": session_id if self.use_memory else None,
@@ -352,35 +352,35 @@ class DocumentQAAgent:
         **kwargs
     ):
         """
-        流式调用问答Agent
+        Stream invoke Q&A Agent
         
         Args:
-            question: 用户问题
-            session_id: 会话ID
-            **kwargs: 其他参数
+            question: User question
+            session_id: Session ID
+            **kwargs: Other parameters
         
         Yields:
-            Agent执行过程中的流式输出
+            Streaming output during Agent execution
         """
         try:
-            logger.info(f"Agent流式处理问题: {question[:100]}...")
+            logger.info(f"Agent streaming processing question: {question[:100]}...")
             
-            # 准备输入
+            # Prepare input
             input_data = self._prepare_input(question, session_id)
             
             full_answer = ""
-            # 流式调用Agent
+            # Stream invoke Agent
             for chunk in self.agent_executor.stream(input_data):
                 if "output" in chunk:
                     content = chunk["output"]
                     full_answer += content
                     yield content
                 elif "intermediate_step" in chunk:
-                    # 也可以输出中间步骤
+                    # Can also output intermediate steps
                     step = chunk["intermediate_step"]
-                    yield f"\n[Agent思考]: {step}\n"
+                    yield f"\n[Agent thinking]: {step}\n"
             
-            # 保存到记忆（如果启用）
+            # Save to memory (if enabled)
             if self.use_memory and self.memory_manager:
                 self.memory_manager.add_message_pair(
                     user_message=question,
@@ -389,41 +389,41 @@ class DocumentQAAgent:
                 )
             
         except Exception as e:
-            logger.error(f"Agent流式问答处理失败: {str(e)}")
-            yield f"抱歉，处理您的问题时出现错误: {str(e)}"
+            logger.error(f"Agent streaming Q&A processing failed: {str(e)}")
+            yield f"Sorry, an error occurred while processing your question: {str(e)}"
     
     def get_relevant_documents(self, question: str) -> List[Document]:
-        """获取与问题相关的文档"""
-        logger.info(f"Agent 正在为问题检索相关文档: {question[:100]}...")
+        """Get documents relevant to the question"""
+        logger.info(f"Agent retrieving relevant documents for question: {question[:100]}...")
         return self.retriever.invoke(question)
     
     def clear_memory(self, session_id: str = "default") -> None:
-        """清空指定会话的记忆"""
+        """Clear memory for specified session"""
         if self.use_memory and self.memory_manager:
             self.memory_manager.clear_memory(session_id)
-            logger.info(f"已清空会话 {session_id} 的记忆")
+            logger.info(f"Cleared memory for session {session_id}")
     
     def get_memory_stats(self, session_id: str = "default") -> Dict[str, Any]:
-        """获取记忆统计信息"""
+        """Get memory statistics"""
         if self.use_memory and self.memory_manager:
             return self.memory_manager.get_memory_stats(session_id)
         else:
             return {"use_memory": False}
     
     def update_retriever_k(self, k: int) -> None:
-        """更新检索器返回的文档数量"""
+        """Update number of documents returned by retriever"""
         self.retriever_k = k
         self.retriever = self._get_retriever()
-        # 重新构建Agent
+        # Rebuild Agent
         self.agent_executor = self._build_agent()
-        logger.info(f"检索器文档数量已更新为: {k}")
+        logger.info(f"Retriever document count updated to: {k}")
 
 
 class ConversationalRetrievalAgent:
     """
-    基于Agent的对话式检索链
+    Agent-based Conversational Retrieval Chain
     
-    实现与ConversationalRetrievalChain相同的功能，使用Agent架构。
+    Implements the same functionality as ConversationalRetrievalChain, using Agent architecture.
     """
     
     def __init__(
@@ -433,31 +433,31 @@ class ConversationalRetrievalAgent:
         retriever_k: int = 4
     ):
         """
-        初始化对话式检索Agent
+        Initialize Conversational Retrieval Agent
         
         Args:
-            vector_store_manager: 向量存储管理器
-            model_name: 模型名称
-            retriever_k: 检索器返回的文档数量
+            vector_store_manager: Vector store manager
+            model_name: Model name
+            retriever_k: Number of documents returned by retriever
         """
         self.vector_store_manager = vector_store_manager
         self.model_name = model_name
         self.retriever_k = retriever_k
         
-        # 初始化组件
+        # Initialize components
         self.llm = LLMFactory.create_llm(model_name)
         self.prompt_manager = PromptTemplateManager()
         
-        # 初始化检索器
+        # Initialize retriever
         self.retriever = self._get_retriever()
         
-        # 构建Agent
+        # Build Agent
         self.agent_executor = self._build_agent()
         
-        logger.info("ConversationalRetrievalAgent 初始化完成")
+        logger.info("ConversationalRetrievalAgent initialization completed")
     
     def _get_retriever(self) -> BaseRetriever:
-        """获取带有Rerank功能的检索器"""
+        """Get retriever with Rerank functionality"""
         from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
         
         if not self.vector_store_manager.vector_store:
@@ -465,47 +465,47 @@ class ConversationalRetrievalAgent:
             
         base_retriever = self.vector_store_manager.get_retriever(k=self.retriever_k)
         
-        # 初始化FlashrankRerank
+        # Initialize FlashrankRerank
         reranker = FlashrankRerank(model=settings.reranker_model, top_n=3)
         
-        # 创建带有上下文压缩的检索器
+        # Create retriever with contextual compression
         compression_retriever = ContextualCompressionRetriever(
             base_compressor=reranker, 
             base_retriever=base_retriever
         )
         
-        logger.info("已创建带有CrossEncoder Rerank功能的压缩检索器")
+        logger.info("Created compression retriever with CrossEncoder Rerank functionality")
         return compression_retriever
     
     def _create_tools(self) -> List[Tool]:
-        """创建Agent工具"""
+        """Create Agent tools"""
         tools = [
             Tool(
                 name="document_retrieval",
-                description="搜索并检索与问题相关的文档内容。",
+                description="Search and retrieve document content related to the question.",
                 func=self.retriever.invoke,
             )
         ]
         return tools
     
     def _generate_standalone_question(self, input_with_history: str) -> str:
-        """生成独立问题"""
-        # 这里可以实现更复杂的逻辑来从对话历史中提取独立问题
-        # 简单实现：直接返回最后的问题
+        """Generate standalone question"""
+        # More complex logic can be implemented here to extract standalone question from conversation history
+        # Simple implementation: directly return the last question
         lines = input_with_history.strip().split('\n')
         return lines[-1] if lines else input_with_history
     
     def _build_agent(self) -> AgentExecutor:
-        """构建Agent执行器"""
+        """Build Agent executor"""
         tools = self._create_tools()
         
-        system_message = """你是一个对话式文档检索助手。你需要：
+        system_message = """You are a conversational document retrieval assistant. You need to:
 
-1. 分析用户的问题和对话历史，如果需要，重新表述问题以便更好地检索。
-2. 使用 document_retrieval 工具检索相关文档。
-3. 基于检索结果和对话上下文回答问题。
+1. Analyze the user's question and conversation history, and if necessary, rephrase the question for better retrieval.
+2. Use the document_retrieval tool to retrieve relevant documents.
+3. Answer questions based on retrieval results and conversation context.
 
-**非常重要**: 如果你决定使用工具，你的回答**必须**只包含工具调用的JSON，不要有任何其他文字。一旦获得工具返回的信息，再组织语言回答问题。如果文档中没有相关信息，请明确说明。"""
+**Very Important**: If you decide to use tools, your response **must** only contain the tool call JSON, without any other text. Once you get the information returned by the tool, then organize the language to answer the question. If there is no relevant information in the documents, please state clearly."""
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_message),
@@ -537,33 +537,33 @@ class ConversationalRetrievalAgent:
         **kwargs
     ) -> Dict[str, Any]:
         """
-        调用对话式检索Agent
+        Invoke Conversational Retrieval Agent
         
         Args:
-            question: 用户问题
-            chat_history: 对话历史
-            **kwargs: 其他参数
+            question: User question
+            chat_history: Chat history
+            **kwargs: Other parameters
         
         Returns:
-            包含答案和相关信息的字典
+            Dictionary containing answer and related information
         """
         try:
-            logger.info(f"对话式Agent处理问题: {question[:100]}...")
+            logger.info(f"Conversational Agent processing question: {question[:100]}...")
             
-            # 准备输入，包含对话历史
+            # Prepare input, including chat history
             if chat_history:
                 history_str = "\n".join([f"Human: {h}\nAssistant: {a}" for h, a in chat_history])
-                input_text = f"对话历史:\n{history_str}\n\n当前问题: {question}"
+                input_text = f"Chat history:\n{history_str}\n\nCurrent question: {question}"
             else:
                 input_text = question
             
             input_data = {"input": input_text}
             
-            # 调用Agent
+            # Invoke Agent
             result = self.agent_executor.invoke(input_data)
             answer = result.get("output", "")
             
-            # 从中间步骤中提取相关文档
+            # Extract relevant documents from intermediate steps
             relevant_docs = []
             if "intermediate_steps" in result:
                 for action, observation in result["intermediate_steps"]:
@@ -571,7 +571,7 @@ class ConversationalRetrievalAgent:
                         relevant_docs.extend(doc for doc in observation if isinstance(doc, Document))
 
             if not relevant_docs and question:
-                logger.warning("无法从Agent中间步骤提取文档，执行后备检索。")
+                logger.warning("Unable to extract documents from Agent intermediate steps, performing fallback retrieval.")
                 relevant_docs = self.retriever.invoke(question)
             
             response = {
@@ -588,13 +588,13 @@ class ConversationalRetrievalAgent:
                 "intermediate_steps": result.get("intermediate_steps", [])
             }
             
-            logger.info("对话式Agent问答处理完成")
+            logger.info("Conversational Agent Q&A processing completed")
             return response
             
         except Exception as e:
-            logger.error(f"对话式Agent问答处理失败: {str(e)}")
+            logger.error(f"Conversational Agent Q&A processing failed: {str(e)}")
             return {
-                "answer": f"抱歉，处理您的问题时出现错误: {str(e)}",
+                "answer": f"Sorry, an error occurred while processing your question: {str(e)}",
                 "question": question,
                 "relevant_documents": [],
                 "chat_history": chat_history,

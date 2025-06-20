@@ -1,7 +1,7 @@
 """
-基于LangGraph的多智能体协作工作流
+Multi-Agent Collaborative Workflow Based on LangGraph
 
-实现以下流程：
+Implements the following flow:
 User Input → Router Agent → SQL/RAG Agent → Answer Agent → Review Agent → Output
 """
 
@@ -27,87 +27,87 @@ logger = logging.getLogger(__name__)
 
 
 class QueryType(str, Enum):
-    """查询类型枚举"""
+    """Query type enumeration"""
     SQL = "sql"
     RAG = "rag"
     UNKNOWN = "unknown"
 
 
 class WorkflowState(TypedDict):
-    """工作流状态定义"""
-    # 基础信息
+    """Workflow state definition"""
+    # Basic information
     user_question: str
     session_id: str
     
-    # 路由信息
+    # Routing information
     query_type: QueryType
     router_reasoning: str
     
-    # 检索结果
+    # Retrieval results
     retrieval_result: Optional[Dict[str, Any]]
     retrieved_documents: Optional[List[Dict[str, Any]]]
     
-    # 答案生成
+    # Answer generation
     generated_answer: str
     answer_reasoning: str
     
-    # 审阅结果
+    # Review results
     review_score: float
     review_feedback: str
     review_approved: bool
     
-    # 消息历史
+    # Message history
     messages: Annotated[List[BaseMessage], add_messages]
     
-    # 迭代控制
+    # Iteration control
     iteration_count: int
     max_iterations: int
 
 
 class RouterAgent:
-    """路由智能体 - 判断查询类型"""
+    """Router Agent - Determines query type"""
     
     def __init__(self, llm=None):
         self.llm = llm or LLMFactory.create_llm()
         self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """你是一个智能路由器，负责判断用户问题应该使用SQL查询还是文档检索(RAG)来回答。
+            ("system", """You are an intelligent router responsible for determining whether a user question should be answered using SQL queries or document retrieval (RAG).
 
-**重要提示**: 请仔细分析问题的语义和上下文，特别注意中文的同音词和多义词。
+**Important Note**: Please carefully analyze the semantics and context of the question, especially paying attention to homonyms and polysemous words.
 
-判断规则：
-1. **SQL查询** - 如果问题涉及：
-   - 数据统计、计算、聚合（如：总数、平均值、最大值、排序）
-   - 具体的数值查询（如：价格、数量、日期范围）
-   - 数据库表中的结构化数据查询
-   - 关键词：多少、统计、计算、排名、比较、筛选、查找记录
+Decision Rules:
+1. **SQL Query** - If the question involves:
+   - Data statistics, calculations, aggregations (e.g., total, average, maximum, sorting)
+   - Specific numerical queries (e.g., price, quantity, date range)
+   - Structured data queries from database tables
+   - Keywords: how many, statistics, calculate, ranking, compare, filter, find records
 
-2. **文档检索(RAG)** - 如果问题涉及：
-   - 概念解释、定义说明（如：什么是...、介绍...）
-   - 人物介绍、实体描述（如：你认识...吗、谁是...）
-   - 流程描述、方法介绍
-   - 非结构化文本内容
-   - 知识性问答
-   - 关键词：是什么、怎么做、为什么、解释、介绍、认识、了解
+2. **Document Retrieval (RAG)** - If the question involves:
+   - Concept explanations, definitions (e.g., what is..., introduce...)
+   - Person introductions, entity descriptions (e.g., do you know..., who is...)
+   - Process descriptions, method introductions
+   - Unstructured text content
+   - Knowledge-based Q&A
+   - Keywords: what is, how to, why, explain, introduce, know, understand
 
-**特别注意**:
-- 优先考虑问题的主要意图而非字面意思
+**Special Note**:
+- Prioritize the main intent of the question rather than literal meaning
 
-请分析用户问题，返回JSON格式：
+Please analyze the user question and return in JSON format:
 {{
-    "query_type": "sql" 或 "rag",
-    "reasoning": "详细的判断理由，包括对问题语义的分析",
-    "confidence": 0.0-1.0的置信度
+    "query_type": "sql" or "rag",
+    "reasoning": "Detailed reasoning including semantic analysis of the question",
+    "confidence": confidence score from 0.0-1.0
 }}"""),
-            ("human", "用户问题：{question}")
+            ("human", "User question: {question}")
         ])
     
     def route(self, question: str) -> Dict[str, Any]:
-        """路由决策"""
+        """Routing decision"""
         try:
             chain = self.prompt | self.llm | StrOutputParser()
             result = chain.invoke({"question": question})
             
-            # 解析JSON结果
+            # Parse JSON result
             import json
             try:
                 parsed = json.loads(result)
@@ -115,11 +115,11 @@ class RouterAgent:
                 reasoning = parsed.get("reasoning", "")
                 confidence = parsed.get("confidence", 0.5)
             except (json.JSONDecodeError, ValueError):
-                # 如果解析失败，使用关键词匹配作为后备
+                # If parsing fails, use keyword matching as fallback
                 query_type, reasoning = self._fallback_routing(question)
                 confidence = 0.6
             
-            logger.info(f"路由决策: {query_type.value} (置信度: {confidence})")
+            logger.info(f"Routing decision: {query_type.value} (confidence: {confidence})")
             return {
                 "query_type": query_type,
                 "reasoning": reasoning,
@@ -127,8 +127,8 @@ class RouterAgent:
             }
             
         except Exception as e:
-            logger.error(f"路由决策失败: {str(e)}")
-            # 使用后备路由
+            logger.error(f"Routing decision failed: {str(e)}")
+            # Use fallback routing
             query_type, reasoning = self._fallback_routing(question)
             return {
                 "query_type": query_type,
@@ -137,9 +137,9 @@ class RouterAgent:
             }
     
     def _fallback_routing(self, question: str) -> tuple[QueryType, str]:
-        """后备路由逻辑"""
-        sql_keywords = ["多少", "统计", "计算", "排名", "比较", "筛选", "查找", "数量", "价格", "总数", "平均", "最大", "最小"]
-        rag_keywords = ["是什么", "怎么做", "为什么", "解释", "介绍", "定义", "概念", "方法", "流程", "认识", "了解", "谁是"]
+        """Fallback routing logic"""
+        sql_keywords = ["how many", "statistics", "calculate", "ranking", "compare", "filter", "find", "count", "price", "total", "average", "maximum", "minimum", "how much", "statistic", "calculation", "rank", "comparison", "screen", "search", "quantity", "price", "total number", "mean", "max", "min"]
+        rag_keywords = ["what is", "how to", "why", "explain", "introduce", "definition", "concept", "method", "process", "know", "understand", "who is", "what", "how to do", "why", "explanation", "introduction", "define", "concept", "approach", "procedure", "recognize", "learn", "who"]
         
         question_lower = question.lower()
         
@@ -147,95 +147,95 @@ class RouterAgent:
         rag_score = sum(1 for keyword in rag_keywords if keyword in question_lower)
         
         if sql_score > rag_score:
-            return QueryType.SQL, f"检测到SQL相关关键词: {sql_score}个"
+            return QueryType.SQL, f"Detected SQL-related keywords: {sql_score} matches"
         elif rag_score > sql_score:
-            return QueryType.RAG, f"检测到RAG相关关键词: {rag_score}个"
+            return QueryType.RAG, f"Detected RAG-related keywords: {rag_score} matches"
         else:
-            return QueryType.RAG, "默认使用RAG检索"
+            return QueryType.RAG, "Default to RAG retrieval"
 
 
 class AnswerAgent:
-    """答案生成智能体"""
+    """Answer Generation Agent"""
     
     def __init__(self, llm=None):
         self.llm = llm or LLMFactory.create_llm()
         self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """你是一个专业的答案生成助手。你的任务是基于检索到的信息，生成或优化最终答案。
+            ("system", """You are a professional answer generation assistant. Your task is to generate or optimize final answers based on retrieved information.
 
-**重要原则**:
-1. **分析检索结果**: 仔细分析检索结果的类型和内容
-2. **准确理解问题意图**: 理解用户真正想了解什么
-3. **基于事实回答**: 严格基于检索到的具体信息，不要编造内容
-4. **智能处理结果**: 
-   - 如果是SQL查询结果，直接使用查询结果，不要重新生成
-   - 如果是RAG检索结果，可以基于文档内容优化答案
-   - 如果检索失败，明确说明原因
+**Important Principles**:
+1. **Analyze Retrieval Results**: Carefully analyze the type and content of retrieval results
+2. **Accurately Understand Question Intent**: Understand what the user really wants to know
+3. **Answer Based on Facts**: Strictly base answers on specific retrieved information, do not fabricate content
+4. **Intelligently Process Results**: 
+   - If it's SQL query results, use the query results directly, no need to regenerate
+   - If it's RAG retrieval results, optimize answers based on document content
+   - If retrieval fails, clearly explain the reason
 
-处理策略：
-- **SQL查询结果**: 如果检索信息来自SQL查询，直接采用查询结果，只需要适当格式化
-- **RAG检索结果**: 如果检索信息来自文档检索，可以基于文档内容生成或优化答案
-- **错误处理**: 如果检索失败，明确说明失败原因
+Processing Strategy:
+- **SQL Query Results**: If retrieval information comes from SQL queries, use query results directly, just format appropriately
+- **RAG Retrieval Results**: If retrieval information comes from document retrieval, generate or optimize answers based on actual content
+- **Error Handling**: If retrieval fails, clearly explain the failure reason
 
-请基于以下信息生成最终答案："""),
-            ("human", """用户问题：{question}
+Please generate a final answer based on the following information:"""),
+            ("human", """User Question: {question}
 
-检索信息：{retrieval_info}
+Retrieval Information: {retrieval_info}
 
-请仔细分析检索信息的类型，如果是SQL查询结果，请直接使用；如果是文档检索结果，请基于实际内容生成答案。""")
+Please carefully analyze the type of retrieval information. If it's SQL query results, use them directly; if it's document retrieval results, generate an answer based on actual content.""")
         ])
     
     def generate_answer(self, question: str, retrieval_result: Dict[str, Any]) -> Dict[str, Any]:
-        """生成答案"""
+        """Generate answer"""
         try:
-            # 格式化检索信息
+            # Format retrieval information
             retrieval_info = ""
             
-            # 处理RAG Agent的返回结果
+            # Handle RAG Agent return results
             if "answer" in retrieval_result and "relevant_documents" in retrieval_result:
-                # RAG Agent返回的结构
+                # RAG Agent return structure
                 rag_answer = retrieval_result.get("answer", "")
                 relevant_docs = retrieval_result.get("relevant_documents", [])
                 
-                # 构建检索信息，包含RAG Agent的答案和文档内容
-                retrieval_info = f"RAG检索结果：\n{rag_answer}\n\n"
+                # Build retrieval information including RAG Agent answer and document content
+                retrieval_info = f"RAG Retrieval Results:\n{rag_answer}\n\n"
                 
                 if relevant_docs:
                     docs_info = "\n".join([
-                        f"文档{i+1}: {doc.get('content', '')[:300]}..."
+                        f"Document {i+1}: {doc.get('content', '')[:300]}..."
                         for i, doc in enumerate(relevant_docs[:3])
                     ])
-                    retrieval_info += f"相关文档片段：\n{docs_info}"
+                    retrieval_info += f"Relevant Document Snippets:\n{docs_info}"
                     
-            # 处理SQL Agent的返回结果
+            # Handle SQL Agent return results
             elif "answer" in retrieval_result and "success" in retrieval_result:
-                # SQL Agent返回的结构
+                # SQL Agent return structure
                 sql_answer = retrieval_result.get("answer", "")
                 success = retrieval_result.get("success", False)
                 
                 if success:
-                    # SQL查询成功，直接返回SQL Agent的答案，不再通过LLM重新处理
-                    logger.info(f"SQL查询成功，直接返回SQL Agent答案: {sql_answer[:100]}...")
+                    # SQL query successful, directly return SQL Agent answer without LLM reprocessing
+                    logger.info(f"SQL query successful, directly returning SQL Agent answer: {sql_answer[:100]}...")
                     return {
                         "answer": sql_answer,
-                        "reasoning": "SQL查询成功，直接使用SQL Agent的答案",
+                        "reasoning": "SQL query successful, using SQL Agent answer directly",
                         "success": True
                     }
                 else:
-                    # SQL查询失败
-                    error_msg = retrieval_result.get("error", "未知错误")
-                    retrieval_info = f"SQL查询失败: {error_msg}"
+                    # SQL query failed
+                    error_msg = retrieval_result.get("error", "Unknown error")
+                    retrieval_info = f"SQL query failed: {error_msg}"
                     
-            # 处理其他情况
+            # Handle other cases
             elif "error" in retrieval_result:
-                retrieval_info = f"检索失败: {retrieval_result.get('error', '未知错误')}"
+                retrieval_info = f"Retrieval failed: {retrieval_result.get('error', 'Unknown error')}"
             else:
-                retrieval_info = "未找到相关检索信息"
+                retrieval_info = "No relevant retrieval information found"
             
-            # 如果检索失败，直接返回错误信息，不再通过LLM处理
-            if "检索失败" in retrieval_info or "SQL查询失败" in retrieval_info:
+            # If retrieval failed, directly return error information without LLM processing
+            if "Retrieval failed" in retrieval_info or "SQL query failed" in retrieval_info:
                 return {
                     "answer": retrieval_info,
-                    "reasoning": "检索失败，直接返回错误信息",
+                    "reasoning": "Retrieval failed, returning error information directly",
                     "success": False
                 }
             
@@ -247,70 +247,70 @@ class AnswerAgent:
             
             return {
                 "answer": answer,
-                "reasoning": "基于检索信息生成答案",
+                "reasoning": "Generated answer based on retrieval information",
                 "success": True
             }
             
         except Exception as e:
-            logger.error(f"答案生成失败: {str(e)}")
+            logger.error(f"Answer generation failed: {str(e)}")
             return {
-                "answer": f"抱歉，生成答案时出现错误: {str(e)}",
-                "reasoning": "生成过程中出现异常",
+                "answer": f"Sorry, an error occurred while generating the answer: {str(e)}",
+                "reasoning": "Exception occurred during generation process",
                 "success": False
             }
 
 
 class ReviewAgent:
-    """审阅智能体 - 评估答案质量"""
+    """Review Agent - Evaluates answer quality"""
     
     def __init__(self, llm=None):
         self.llm = llm or LLMFactory.create_llm()
         self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """你是一个专业的答案质量审阅员。你需要评估生成的答案质量并提供改进建议。
+            ("system", """You are a professional answer quality reviewer. You need to evaluate the quality of generated answers and provide improvement suggestions.
 
-评估维度：
-1. **准确性** (0-10分): 答案是否准确，有无事实错误，是否与检索信息一致
-2. **完整性** (0-10分): 答案是否完整回答了用户问题
-3. **相关性** (0-10分): 答案是否与问题高度相关，是否回答了用户真正想了解的内容
-4. **清晰度** (0-10分): 答案是否表达清晰，易于理解
-5. **有用性** (0-10分): 答案是否对用户有实际帮助
+Evaluation Dimensions:
+1. **Accuracy** (0-10 points): Is the answer accurate, are there factual errors, is it consistent with retrieval information
+2. **Completeness** (0-10 points): Does the answer completely address the user's question
+3. **Relevance** (0-10 points): Is the answer highly relevant to the question, does it address what the user really wants to know
+4. **Clarity** (0-10 points): Is the answer clearly expressed and easy to understand
+5. **Usefulness** (0-10 points): Is the answer practically helpful to the user
 
-**特别关注**:
-- 答案是否正确理解了用户问题的意图
-- 答案是否基于检索到的实际信息
-- 是否存在答案与检索信息不符的情况
-- 是否存在概念混淆或实体识别错误
+**Special Focus**:
+- Does the answer correctly understand the user's question intent
+- Is the answer based on actual retrieved information
+- Are there cases where the answer doesn't match the retrieval information
+- Are there concept confusions or entity recognition errors
 
-评分标准：
-- 8-10分：优秀，答案准确且完整回答了问题
-- 6-7分：良好，基本回答了问题但可能有小问题
-- 4-5分：一般，部分回答了问题但存在明显不足
-- 0-3分：差，答案错误或完全没有回答问题
+Scoring Standards:
+- 8-10 points: Excellent, answer is accurate and completely addresses the question
+- 6-7 points: Good, basically answers the question but may have minor issues
+- 4-5 points: Fair, partially answers the question but has obvious shortcomings
+- 0-3 points: Poor, answer is incorrect or completely fails to address the question
 
-请返回JSON格式：
+Please return in JSON format:
 {{
-    "overall_score": 总分(0-10),
+    "overall_score": total score (0-10),
     "dimension_scores": {{
-        "accuracy": 准确性得分,
-        "completeness": 完整性得分,
-        "relevance": 相关性得分,
-        "clarity": 清晰度得分,
-        "usefulness": 有用性得分
+        "accuracy": accuracy score,
+        "completeness": completeness score,
+        "relevance": relevance score,
+        "clarity": clarity score,
+        "usefulness": usefulness score
     }},
     "approved": true/false,
-    "feedback": "具体的改进建议，特别指出问题所在",
-    "strengths": "答案的优点",
-    "weaknesses": "答案的不足和需要改进的地方"
+    "feedback": "Specific improvement suggestions, particularly pointing out issues",
+    "strengths": "Strengths of the answer",
+    "weaknesses": "Weaknesses and areas for improvement"
 }}"""),
-            ("human", """用户问题：{question}
+            ("human", """User Question: {question}
 
-生成的答案：{answer}
+Generated Answer: {answer}
 
-请对这个答案进行全面评估，特别关注答案是否正确理解和回答了用户问题。""")
+Please conduct a comprehensive evaluation of this answer, particularly focusing on whether the answer correctly understands and addresses the user's question.""")
         ])
     
     def review_answer(self, question: str, answer: str) -> Dict[str, Any]:
-        """审阅答案"""
+        """Review answer"""
         try:
             chain = self.prompt | self.llm | StrOutputParser()
             result = chain.invoke({
@@ -318,7 +318,7 @@ class ReviewAgent:
                 "answer": answer
             })
             
-            # 解析JSON结果
+            # Parse JSON result
             import json
             try:
                 parsed = json.loads(result)
@@ -337,22 +337,22 @@ class ReviewAgent:
                 }
                 
             except (json.JSONDecodeError, ValueError):
-                # 如果解析失败，使用简单评分
+                # If parsing fails, use simple scoring
                 return self._simple_review(answer)
                 
         except Exception as e:
-            logger.error(f"答案审阅失败: {str(e)}")
+            logger.error(f"Answer review failed: {str(e)}")
             return self._simple_review(answer)
     
     def _simple_review(self, answer: str) -> Dict[str, Any]:
-        """简单审阅逻辑"""
-        # 基于答案长度和关键词的简单评分
+        """Simple review logic"""
+        # Simple scoring based on answer length and keywords
         score = 5.0
         if len(answer) > 100:
             score += 1.0
         if len(answer) > 300:
             score += 1.0
-        if "抱歉" in answer or "错误" in answer:
+        if "sorry" in answer.lower() or "error" in answer.lower() or "sorry" in answer or "error" in answer:
             score -= 2.0
         
         score = max(0.0, min(10.0, score))
@@ -360,7 +360,7 @@ class ReviewAgent:
         return {
             "score": score,
             "approved": score >= 8.0,
-            "feedback": "基于简单规则的评分",
+            "feedback": "Scoring based on simple rules",
             "detailed_scores": {},
             "strengths": "",
             "weaknesses": "",
@@ -369,7 +369,7 @@ class ReviewAgent:
 
 
 class MultiAgentWorkflow:
-    """多智能体协作工作流"""
+    """Multi-Agent Collaborative Workflow"""
     
     def __init__(
         self,
@@ -379,23 +379,23 @@ class MultiAgentWorkflow:
         max_iterations: int = 2
     ):
         """
-        初始化多智能体工作流
+        Initialize multi-agent workflow
         
         Args:
-            vector_store_manager: 向量存储管理器
-            sql_db_path: SQL数据库路径
-            model_name: 模型名称
-            max_iterations: 最大迭代次数
+            vector_store_manager: Vector store manager
+            sql_db_path: SQL database path
+            model_name: Model name
+            max_iterations: Maximum number of iterations
         """
         self.model_name = model_name
         self.max_iterations = max_iterations
         
-        # 初始化各个智能体
+        # Initialize agents
         self.router_agent = RouterAgent(LLMFactory.create_llm(model_name))
         self.answer_agent = AnswerAgent(LLMFactory.create_llm(model_name))
         self.review_agent = ReviewAgent(LLMFactory.create_llm(model_name))
         
-        # 初始化RAG和SQL智能体
+        # Initialize RAG and SQL agents
         if vector_store_manager is None:
             vector_store_manager = VectorStoreManager()
             vector_store_manager.get_or_create_vector_store()
@@ -407,14 +407,14 @@ class MultiAgentWorkflow:
         )
         
         
-        # 初始化SQL Agent
+        # Initialize SQL Agent
         try:
-            # 确保使用正确的数据库路径
+            # Ensure correct database path is used
             if sql_db_path is None:
                 from pathlib import Path
                 base_path = Path(__file__).parent.parent.parent
                 sql_db_path = str(base_path / "data" / "database" / "erp.db")
-                logger.info(f"使用默认数据库路径: {sql_db_path}")
+                logger.info(f"Using default database path: {sql_db_path}")
             
             self.sql_agent = SQLAgent(
                 db_path=sql_db_path,
@@ -423,50 +423,50 @@ class MultiAgentWorkflow:
                 verbose=True
             )
             self.sql_available = True
-            logger.info(f"SQLAgent 在工作流中初始化成功，数据库路径: {sql_db_path}")
+            logger.info(f"SQLAgent initialized successfully in workflow, database path: {sql_db_path}")
         except Exception as e:
-            logger.error(f"SQLAgent 在工作流中初始化失败: {str(e)}")
+            logger.error(f"SQLAgent initialization failed in workflow: {str(e)}")
             self.sql_agent = None
             self.sql_available = False
         
-        # 构建工作流图
+        # Build workflow graph
         self.workflow = self._build_workflow()
         
-        logger.info("多智能体工作流初始化完成")
+        logger.info("Multi-agent workflow initialization completed")
     
     def _build_workflow(self) -> StateGraph:
-        """构建LangGraph工作流"""
+        """Build LangGraph workflow"""
         workflow = StateGraph(WorkflowState)
         
-        # 添加节点
+        # Add nodes
         workflow.add_node("router", self._router_node)
         workflow.add_node("sql_retrieval", self._sql_retrieval_node)
         workflow.add_node("rag_retrieval", self._rag_retrieval_node)
         workflow.add_node("answer_generation", self._answer_generation_node)
         workflow.add_node("review", self._review_node)
         
-        # 设置入口点
+        # Set entry point
         workflow.set_entry_point("router")
         
-        # 添加条件边
+        # Add conditional edges
         workflow.add_conditional_edges(
             "router",
             self._route_decision,
             {
                 "sql": "sql_retrieval",
                 "rag": "rag_retrieval",
-                "unknown": "rag_retrieval"  # 默认使用RAG
+                "unknown": "rag_retrieval"  # Default to RAG
             }
         )
         
-        # 检索到答案生成
+        # Retrieval to answer generation
         workflow.add_edge("sql_retrieval", "answer_generation")
         workflow.add_edge("rag_retrieval", "answer_generation")
         
-        # 答案生成到审阅
+        # Answer generation to review
         workflow.add_edge("answer_generation", "review")
         
-        # 审阅的条件边
+        # Review conditional edges
         workflow.add_conditional_edges(
             "review",
             self._review_decision,
@@ -480,97 +480,87 @@ class MultiAgentWorkflow:
         return workflow.compile()
     
     def _router_node(self, state: WorkflowState) -> WorkflowState:
-        """路由节点"""
-        logger.info("执行路由决策...")
+        """Router node"""
+        logger.info("Executing routing decision...")
         
         routing_result = self.router_agent.route(state["user_question"])
         
         state["query_type"] = routing_result["query_type"]
         state["router_reasoning"] = routing_result["reasoning"]
-        state["messages"].append(AIMessage(content=f"路由决策: {routing_result['query_type'].value} - {routing_result['reasoning']}"))
+        state["messages"].append(AIMessage(content=f"Routing decision: {routing_result['query_type'].value} - {routing_result['reasoning']}"))
         
         return state
     
     def _sql_retrieval_node(self, state: WorkflowState) -> WorkflowState:
-        """SQL检索节点"""
-        logger.info("执行SQL检索...")
+        """SQL retrieval node"""
+        logger.info("Executing SQL retrieval...")
         
         if not self.sql_available:
             state["retrieval_result"] = {
                 "success": False,
-                "error": "SQL Agent不可用",
-                "answer": "抱歉，SQL查询功能当前不可用。"
+                "error": "SQL Agent unavailable",
+                "answer": "Sorry, SQL query functionality is currently unavailable."
             }
         else:
-            # 为SQL Agent使用独立的会话ID，避免记忆污染
+            # Use independent session ID for SQL Agent to avoid memory pollution
             sql_session_id = f"sql_{state['session_id']}"
             result = self.sql_agent.query(
                 question=state["user_question"],
                 session_id=sql_session_id
             )
             
-            # 添加调试日志
-            logger.debug(f"SQL检索结果结构: {list(result.keys())}")
-            logger.debug(f"SQL查询成功: {result.get('success', False)}")
-            logger.debug(f"SQL答案长度: {len(result.get('answer', ''))}")
+            # Add debug logs
+            logger.debug(f"SQL retrieval result structure: {list(result.keys())}")
+            logger.debug(f"SQL query success: {result.get('success', False)}")
+            logger.debug(f"SQL answer length: {len(result.get('answer', ''))}")
             if result.get('answer'):
-                logger.debug(f"SQL答案前200字符: {result.get('answer', '')[:200]}...")
+                logger.debug(f"SQL answer first 200 characters: {result.get('answer', '')[:200]}...")
             
             state["retrieval_result"] = result
         
-        state["messages"].append(AIMessage(content="SQL检索完成"))
+        state["messages"].append(AIMessage(content="SQL retrieval completed"))
         return state
     
     def _rag_retrieval_node(self, state: WorkflowState) -> WorkflowState:
-        """RAG检索节点"""
-        logger.info("执行RAG检索...")
+        """RAG retrieval node"""
+        logger.info("Executing RAG retrieval...")
         
         result = self.rag_agent.invoke(
             question=state["user_question"],
             session_id=state["session_id"]
         )
         
-        # 添加调试日志
-        logger.debug(f"RAG检索结果结构: {list(result.keys())}")
-        logger.debug(f"RAG答案长度: {len(result.get('answer', ''))}")
-        logger.debug(f"相关文档数量: {len(result.get('relevant_documents', []))}")
+        # Add debug logs
+        logger.debug(f"RAG retrieval result structure: {list(result.keys())}")
+        logger.debug(f"RAG answer length: {len(result.get('answer', ''))}")
+        logger.debug(f"Relevant documents count: {len(result.get('relevant_documents', []))}")
         
         state["retrieval_result"] = result
         state["retrieved_documents"] = result.get("retrieved_documents", [])
-        state["messages"].append(AIMessage(content="RAG检索完成"))
+        state["messages"].append(AIMessage(content="RAG retrieval completed"))
         
         return state
     
     def _answer_generation_node(self, state: WorkflowState) -> WorkflowState:
-        """答案生成节点"""
-        logger.info("生成答案...")
-        
-        # 如果是重新生成，增加迭代计数
-        if state.get("generated_answer"):
-            state["iteration_count"] = state.get("iteration_count", 0) + 1
-        else:
-            state["iteration_count"] = 1
-        
-        # 添加调试日志
-        retrieval_result = state["retrieval_result"]
-        logger.debug(f"传递给AnswerAgent的数据结构: {list(retrieval_result.keys()) if retrieval_result else 'None'}")
+        """Answer generation node"""
+        logger.info("Generating answer...")
         
         answer_result = self.answer_agent.generate_answer(
             question=state["user_question"],
             retrieval_result=state["retrieval_result"]
         )
         
-        logger.debug(f"AnswerAgent生成的答案长度: {len(answer_result.get('answer', ''))}")
+        # Update state with the generated answer and reasoning
+        state["generated_answer"] = answer_result.get("answer", "No answer could be generated.")
+        state["answer_reasoning"] = answer_result.get("reasoning", "")
         
-        state["generated_answer"] = answer_result["answer"]
-        state["answer_reasoning"] = answer_result["reasoning"]
-        state["messages"].append(AIMessage(content=f"答案生成完成 (第{state['iteration_count']}次)"))
+        logger.info(f"Generated answer: {state['generated_answer'][:100]}...")
         
         return state
     
     def _review_node(self, state: WorkflowState) -> WorkflowState:
-        """审阅节点"""
-        logger.info("审阅答案质量...")
+        """Review the generated answer"""
+        logger.info("Reviewing answer quality...")
         
         review_result = self.review_agent.review_answer(
             question=state["user_question"],
@@ -580,12 +570,12 @@ class MultiAgentWorkflow:
         state["review_score"] = review_result["score"]
         state["review_feedback"] = review_result["feedback"]
         state["review_approved"] = review_result["approved"]
-        state["messages"].append(AIMessage(content=f"审阅完成 - 得分: {review_result['score']:.1f}"))
+        state["messages"].append(AIMessage(content=f"Review completed - Score: {review_result['score']:.1f}"))
         
         return state
     
     def _route_decision(self, state: WorkflowState) -> str:
-        """路由决策函数"""
+        """Route decision function"""
         query_type = state.get("query_type", QueryType.UNKNOWN)
         if query_type == QueryType.SQL and self.sql_available:
             return "sql"
@@ -595,16 +585,16 @@ class MultiAgentWorkflow:
             return "unknown"
     
     def _review_decision(self, state: WorkflowState) -> str:
-        """审阅决策函数"""
-        # 如果审阅通过，结束流程
+        """Review decision function"""
+        # If review passes, end process
         if state.get("review_approved", False):
             return "approved"
         
-        # 如果达到最大迭代次数，强制结束
+        # If maximum iterations reached, force end
         if state.get("iteration_count", 0) >= state.get("max_iterations", self.max_iterations):
             return "end"
         
-        # 否则重新生成答案
+        # Otherwise regenerate answer
         return "retry"
     
     @with_langsmith_tracing(name="MultiAgentWorkflow.run", tags=["workflow", "multi-agent"])
@@ -615,20 +605,20 @@ class MultiAgentWorkflow:
         **kwargs
     ) -> Dict[str, Any]:
         """
-        运行多智能体工作流
+        Run multi-agent workflow
         
         Args:
-            question: 用户问题
-            session_id: 会话ID
-            **kwargs: 其他参数
+            question: User question
+            session_id: Session ID
+            **kwargs: Other parameters
         
         Returns:
-            包含完整结果的字典
+            Dictionary containing complete results
         """
         try:
-            logger.info(f"启动多智能体工作流处理问题: {question[:100]}...")
+            logger.info(f"Starting multi-agent workflow to process question: {question[:100]}...")
             
-            # 初始化状态
+            # Initialize state
             initial_state = WorkflowState(
                 user_question=question,
                 session_id=session_id,
@@ -646,10 +636,10 @@ class MultiAgentWorkflow:
                 max_iterations=self.max_iterations
             )
             
-            # 运行工作流
+            # Run workflow
             final_state = self.workflow.invoke(initial_state)
             
-            # 构建返回结果
+            # Build return result
             result = {
                 "question": question,
                 "answer": final_state["generated_answer"],
@@ -664,18 +654,18 @@ class MultiAgentWorkflow:
                 "success": True
             }
             
-            logger.info(f"工作流完成 - 查询类型: {final_state['query_type'].value}, 审阅得分: {final_state['review_score']:.1f}")
+            logger.info(f"Workflow completed - Query type: {final_state['query_type'].value}, Review score: {final_state['review_score']:.1f}")
             return result
             
         except Exception as e:
-            logger.error(f"多智能体工作流执行失败: {str(e)}")
+            logger.error(f"Multi-agent workflow execution failed: {str(e)}")
             return {
                 "question": question,
-                "answer": f"工作流执行失败: {str(e)}",
+                "answer": f"Workflow execution failed: {str(e)}",
                 "query_type": "error",
                 "router_reasoning": "",
                 "review_score": 0.0,
-                "review_feedback": "执行过程中出现异常",
+                "review_feedback": "Exception occurred during execution",
                 "review_approved": False,
                 "iteration_count": 0,
                 "retrieved_documents": [],
@@ -691,20 +681,20 @@ class MultiAgentWorkflow:
         **kwargs
     ) -> Dict[str, Any]:
         """
-        异步运行多智能体工作流
+        Asynchronously run multi-agent workflow
         
         Args:
-            question: 用户问题
-            session_id: 会话ID
-            **kwargs: 其他参数
+            question: User question
+            session_id: Session ID
+            **kwargs: Other parameters
         
         Returns:
-            包含完整结果的字典
+            Dictionary containing complete results
         """
         try:
-            logger.info(f"启动异步多智能体工作流处理问题: {question[:100]}...")
+            logger.info(f"Starting asynchronous multi-agent workflow to process question: {question[:100]}...")
             
-            # 初始化状态
+            # Initialize state
             initial_state = WorkflowState(
                 user_question=question,
                 session_id=session_id,
@@ -722,10 +712,10 @@ class MultiAgentWorkflow:
                 max_iterations=self.max_iterations
             )
             
-            # 异步运行工作流
+            # Run workflow asynchronously
             final_state = await self.workflow.ainvoke(initial_state)
             
-            # 构建返回结果
+            # Build return result
             result = {
                 "question": question,
                 "answer": final_state["generated_answer"],
@@ -740,18 +730,18 @@ class MultiAgentWorkflow:
                 "success": True
             }
             
-            logger.info(f"异步工作流完成 - 查询类型: {final_state['query_type'].value}, 审阅得分: {final_state['review_score']:.1f}")
+            logger.info(f"Asynchronous workflow completed - Query type: {final_state['query_type'].value}, Review score: {final_state['review_score']:.1f}")
             return result
             
         except Exception as e:
-            logger.error(f"异步多智能体工作流执行失败: {str(e)}")
+            logger.error(f"Asynchronous multi-agent workflow execution failed: {str(e)}")
             return {
                 "question": question,
-                "answer": f"工作流执行失败: {str(e)}",
+                "answer": f"Workflow execution failed: {str(e)}",
                 "query_type": "error",
                 "router_reasoning": "",
                 "review_score": 0.0,
-                "review_feedback": "执行过程中出现异常",
+                "review_feedback": "Exception occurred during execution",
                 "review_approved": False,
                 "iteration_count": 0,
                 "retrieved_documents": [],
@@ -761,7 +751,7 @@ class MultiAgentWorkflow:
             }
     
     def get_workflow_info(self) -> Dict[str, Any]:
-        """获取工作流信息"""
+        """Get workflow information"""
         return {
             "workflow_type": "multi_agent",
             "max_iterations": self.max_iterations,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-文档问答系统主入口文件
+Document Q&A System Main Entry File
 """
 
 import os
@@ -8,8 +8,10 @@ import sys
 import logging
 import argparse
 from pathlib import Path
+import atexit
+import asyncio
 
-# 添加项目根目录到Python路径
+# Add project root directory to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -18,25 +20,75 @@ from src.chains.qa_chain import DocumentQAChain
 from src.workflows.multi_agent_workflow import MultiAgentWorkflow
 from src.config.settings import settings
 
-# 配置日志
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
+# Reduce log level for noisy background services to keep console clean
+logging.getLogger("src.vectorstores.file_watcher").setLevel(logging.WARNING)
+logging.getLogger("src.vectorstores.dynamic_vector_store").setLevel(logging.WARNING)
+
+# Global list to hold background services that need cleanup
+background_services = []
+main_event_loop = None
+
+def shutdown_services():
+    """Shutdown all registered background services."""
+    logger.info("Shutting down background services...")
+    global main_event_loop
+
+    async_tasks = []
+    for service in background_services:
+        if hasattr(service, 'cleanup'):
+            if asyncio.iscoroutinefunction(service.cleanup):
+                async_tasks.append(service.cleanup())
+            else:
+                try:
+                    service.cleanup()
+                    logger.info(f"Successfully shut down sync service {service.__class__.__name__}.")
+                except Exception as e:
+                    logger.error(f"Error shutting down sync service {service.__class__.__name__}: {e}", exc_info=True)
+
+    if async_tasks and main_event_loop and not main_event_loop.is_closed():
+        logger.info(f"Running {len(async_tasks)} async cleanup tasks...")
+        try:
+            # Set the loop as the current one for this context, in case it was unset.
+            asyncio.set_event_loop(main_event_loop)
+            # Create a single task to run all cleanup coroutines concurrently
+            all_cleanup_tasks = asyncio.gather(*async_tasks, return_exceptions=True)
+            results = main_event_loop.run_until_complete(all_cleanup_tasks)
+            
+            # Process results
+            cleaned_services = [s for s in background_services if asyncio.iscoroutinefunction(s.cleanup)]
+            for result, service in zip(results, cleaned_services):
+                if isinstance(result, Exception):
+                    logger.error(f"Error during async cleanup of {service.__class__.__name__}: {result}", exc_info=result)
+                else:
+                    logger.info(f"Successfully shut down async service {service.__class__.__name__}.")
+
+        except Exception as e:
+            logger.error(f"Failed to run async cleanup tasks: {e}", exc_info=True)
+
+
+# Register the shutdown function to be called on exit
+atexit.register(shutdown_services)
 
 def build_vector_store(force_rebuild: bool = False, use_openai: bool = False):
-    """构建向量存储"""
-    logger.info("开始构建向量存储...")
+    """Build vector store"""
+    logger.info("Starting to build vector store...")
     
     try:
         vector_manager = VectorStoreManager(use_openai_embeddings=use_openai)
         vector_manager.get_or_create_vector_store(force_recreate=force_rebuild)
-        logger.info("向量存储构建完成")
+        logger.info("Vector store construction completed")
+        if use_openai and hasattr(vector_manager, 'cleanup'):
+            background_services.append(vector_manager)
         return vector_manager
     except Exception as e:
-        logger.error(f"构建向量存储失败: {str(e)}")
+        logger.error(f"Failed to build vector store: {str(e)}")
         raise
 
 
@@ -44,8 +96,8 @@ def build_vector_store(force_rebuild: bool = False, use_openai: bool = False):
 
 
 def start_api_server():
-    """启动API服务器"""
-    logger.info("启动API服务器...")
+    """Start API server"""
+    logger.info("Starting API server...")
     
     try:
         import uvicorn
@@ -58,75 +110,75 @@ def start_api_server():
             reload=False
         )
     except Exception as e:
-        logger.error(f"启动API服务器失败: {str(e)}")
+        logger.error(f"Failed to start API server: {str(e)}")
         raise
 
 
 def main():
-    """主函数"""
-    parser = argparse.ArgumentParser(description="文档问答系统")
+    """Main function"""
+    parser = argparse.ArgumentParser(description="Document Q&A System")
     
-    # 添加子命令
-    subparsers = parser.add_subparsers(dest="command", help="可用命令")
+    # Add subcommands
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
     
-    # 交互模式
-    chat_parser = subparsers.add_parser("chat", help="启动交互式问答")
-    chat_parser.add_argument("--model", default=None, help="指定使用的模型")
-    chat_parser.add_argument("--session", default="default", help="会话ID")
-    chat_parser.add_argument("--no-memory", action="store_true", help="不使用记忆功能")
-    chat_parser.add_argument("--conversational", action="store_true", help="使用对话式检索")
-    chat_parser.add_argument("--use-agent", action="store_true", help="使用Agent架构而非Chain架构")
-    chat_parser.add_argument("--use-workflow", action="store_true", help="使用多智能体工作流(LangGraph)")
-    # 动态向量存储默认启用，只提供禁用选项
+    # Interactive mode
+    chat_parser = subparsers.add_parser("chat", help="Start interactive Q&A")
+    chat_parser.add_argument("--model", default=None, help="Specify the model to use")
+    chat_parser.add_argument("--session", default="default", help="Session ID")
+    chat_parser.add_argument("--no-memory", action="store_true", help="Do not use memory function")
+    chat_parser.add_argument("--conversational", action="store_true", help="Use conversational retrieval")
+    chat_parser.add_argument("--use-agent", action="store_true", help="Use Agent architecture instead of Chain architecture")
+    chat_parser.add_argument("--use-workflow", action="store_true", help="Use multi-agent workflow (LangGraph)")
+    # Dynamic vector store enabled by default, only provide disable option
     chat_parser.add_argument(
         "--no-dynamic", 
         action="store_true", 
-        help="禁用动态向量存储，使用传统静态模式"
+        help="Disable dynamic vector store, use traditional static mode"
     )
     
-    # 服务器模式
-    server_parser = subparsers.add_parser("server", help="启动API服务器")
+    # Server mode
+    server_parser = subparsers.add_parser("server", help="Start API server")
     
-    # 向量存储管理
-    vector_parser = subparsers.add_parser("vector", help="向量存储管理")
+    # Vector store management
+    vector_parser = subparsers.add_parser("vector", help="Vector store management")
     vector_subparsers = vector_parser.add_subparsers(dest="vector_action")
     
-    rebuild_parser = vector_subparsers.add_parser("rebuild", help="重建向量存储")
-    rebuild_parser.add_argument("--force", action="store_true", help="强制重建")
+    rebuild_parser = vector_subparsers.add_parser("rebuild", help="Rebuild vector store")
+    rebuild_parser.add_argument("--force", action="store_true", help="Force rebuild")
     
-    info_parser = vector_subparsers.add_parser("info", help="显示向量存储信息")
+    info_parser = vector_subparsers.add_parser("info", help="Show vector store information")
     
-    # 评估命令
-    eval_parser = subparsers.add_parser("eval", help="模型评估")
+    # Evaluation commands
+    eval_parser = subparsers.add_parser("eval", help="Model evaluation")
     eval_subparsers = eval_parser.add_subparsers(dest="eval_action")
     
-    # 创建数据集
-    create_dataset_parser = eval_subparsers.add_parser("create-dataset", help="创建评估数据集")
-    create_dataset_parser.add_argument("--name", help="数据集名称（创建自定义数据集时必需）")
-    create_dataset_parser.add_argument("--description", default="", help="数据集描述")
-    create_dataset_parser.add_argument("--default", action="store_true", help="创建默认数据集")
+    # Create dataset
+    create_dataset_parser = eval_subparsers.add_parser("create-dataset", help="Create evaluation dataset")
+    create_dataset_parser.add_argument("--name", help="Dataset name (required when creating custom dataset)")
+    create_dataset_parser.add_argument("--description", default="", help="Dataset description")
+    create_dataset_parser.add_argument("--default", action="store_true", help="Create default dataset")
     
-    # 列出数据集
-    list_datasets_parser = eval_subparsers.add_parser("list-datasets", help="列出所有数据集")
+    # List datasets
+    list_datasets_parser = eval_subparsers.add_parser("list-datasets", help="List all datasets")
     
-    # 运行评估
-    run_eval_parser = eval_subparsers.add_parser("run", help="运行评估")
-    run_eval_parser.add_argument("--dataset", required=True, help="数据集名称")
+    # Run evaluation
+    run_eval_parser = eval_subparsers.add_parser("run", help="Run evaluation")
+    run_eval_parser.add_argument("--dataset", required=True, help="Dataset name")
     run_eval_parser.add_argument("--evaluators", nargs="+", 
                                 default=["accuracy", "relevance", "helpfulness", "groundedness"],
-                                help="评估器类型")
-    run_eval_parser.add_argument("--conversational", action="store_true", help="使用对话式检索链")
-    run_eval_parser.add_argument("--concurrency", type=int, default=3, help="并发数量")
+                                help="Evaluator types")
+    run_eval_parser.add_argument("--conversational", action="store_true", help="Use conversational retrieval chain")
+    run_eval_parser.add_argument("--concurrency", type=int, default=3, help="Concurrency count")
     
-    # 列出报告
-    list_reports_parser = eval_subparsers.add_parser("list-reports", help="列出评估报告")
+    # List reports
+    list_reports_parser = eval_subparsers.add_parser("list-reports", help="List evaluation reports")
     
-    # 查看报告
-    view_report_parser = eval_subparsers.add_parser("view-report", help="查看评估报告")
-    view_report_parser.add_argument("--file", required=True, help="报告文件路径")
+    # View report
+    view_report_parser = eval_subparsers.add_parser("view-report", help="View evaluation report")
+    view_report_parser.add_argument("--file", required=True, help="Report file path")
     
-    # 生成汇总
-    summary_parser = eval_subparsers.add_parser("summary", help="生成评估汇总")
+    # Generate summary
+    summary_parser = eval_subparsers.add_parser("summary", help="Generate evaluation summary")
     
     args = parser.parse_args()
     
@@ -144,21 +196,21 @@ def main():
         elif args.command == "eval":
             handle_eval_command(args)
         else:
-            logger.error(f"未知命令: {args.command}")
+            logger.error(f"Unknown command: {args.command}")
             
     except KeyboardInterrupt:
-        logger.info("程序被用户中断")
+        logger.info("Program interrupted by user")
     except Exception as e:
-        logger.error(f"执行命令失败: {str(e)}")
+        logger.error(f"Command execution failed: {str(e)}")
         if logger.level == logging.DEBUG:
             import traceback
             traceback.print_exc()
 
 
 def handle_eval_command(args):
-    """处理评估命令"""
+    """Handle evaluation command"""
     if not args.eval_action:
-        logger.error("请指定评估操作")
+        logger.error("Please specify evaluation action")
         return
     
     if args.eval_action == "create-dataset":
@@ -174,577 +226,588 @@ def handle_eval_command(args):
     elif args.eval_action == "summary":
         handle_evaluation_summary()
     else:
-        logger.error(f"未知的评估操作: {args.eval_action}")
+        logger.error(f"Unknown evaluation action: {args.eval_action}")
 
 
 def handle_create_dataset(args):
-    """处理创建数据集命令"""
+    """Handle create dataset command"""
     try:
         from src.evaluation.datasets import DatasetManager, DatasetBuilder
         
         dataset_manager = DatasetManager()
         
         if args.default:
-            # 创建默认数据集
+            # Create default dataset
             dataset_manager.create_default_datasets()
             datasets = dataset_manager.list_datasets()
-            logger.info(f"默认数据集已创建: {datasets}")
+            logger.info(f"Default datasets created: {datasets}")
         else:
-            # 创建自定义数据集 - 需要名称
+            # Create custom dataset - name required
             if not args.name:
-                logger.error("创建自定义数据集时必须提供 --name 参数")
+                logger.error("Must provide --name parameter when creating custom dataset")
                 return
             
             from src.evaluation.datasets import EvaluationDataset
             dataset = EvaluationDataset(name=args.name, description=args.description)
             file_path = dataset_manager.save_dataset(dataset)
-            logger.info(f"数据集 '{args.name}' 已创建: {file_path}")
+            logger.info(f"Custom dataset '{args.name}' created: {file_path}")
             
     except Exception as e:
-        logger.error(f"创建数据集失败: {str(e)}")
+        logger.error(f"Failed to create dataset: {str(e)}")
 
 
 def handle_list_datasets():
-    """处理列出数据集命令"""
+    """Handle list datasets command"""
     try:
         from src.evaluation.datasets import DatasetManager
         
         dataset_manager = DatasetManager()
         datasets = dataset_manager.list_datasets()
         
-        if datasets:
-            logger.info("可用的评估数据集:")
-            for dataset_name in datasets:
-                logger.info(f"  - {dataset_name}")
+        if not datasets:
+            logger.info("No datasets found")
         else:
-            logger.info("没有找到评估数据集")
+            logger.info("Available datasets:")
+            for dataset in datasets:
+                logger.info(f"  - {dataset}")
             
     except Exception as e:
-        logger.error(f"列出数据集失败: {str(e)}")
+        logger.error(f"Failed to list datasets: {str(e)}")
 
 
 def handle_run_evaluation(args):
-    """处理运行评估命令"""
+    """Handle run evaluation command"""
     try:
-        import asyncio
+        from src.evaluation.runners import EvaluationRunner
+        
+        # Validate dataset exists
         from src.evaluation.datasets import DatasetManager
-        from src.evaluation.runners import EvaluationRunner, EvaluationManager
-        from src.vectorstores.vector_store import VectorStoreManager
-        from src.chains.qa_chain import DocumentQAChain, ConversationalRetrievalChain
-        
-        # 初始化组件
-        logger.info("初始化组件...")
-        vector_store_manager = VectorStoreManager(use_openai_embeddings=False)
-        vector_store_manager.get_or_create_vector_store()
-        
-        qa_chain = DocumentQAChain(vector_store_manager=vector_store_manager, use_memory=True)
-        conversational_chain = ConversationalRetrievalChain(vector_store_manager=vector_store_manager)
-        
-        # 加载数据集
         dataset_manager = DatasetManager()
-        dataset = dataset_manager.load_dataset(args.dataset)
-        if not dataset:
-            logger.error(f"数据集 '{args.dataset}' 不存在")
+        available_datasets = dataset_manager.list_datasets()
+        
+        if args.dataset not in available_datasets:
+            logger.error(f"Dataset '{args.dataset}' not found. Available: {available_datasets}")
             return
         
-        # 创建评估运行器
-        runner = EvaluationRunner(qa_chain=qa_chain, conversational_chain=conversational_chain)
+        # Create evaluation runner
+        runner = EvaluationRunner(
+            dataset_name=args.dataset,
+            evaluators=args.evaluators,
+            conversational_retrieval=args.conversational,
+            concurrency=args.concurrency
+        )
         
-        # 运行评估
-        logger.info(f"开始评估数据集: {args.dataset}")
+        logger.info(f"Starting evaluation on dataset '{args.dataset}'...")
+        logger.info(f"Evaluators: {args.evaluators}")
+        logger.info(f"Concurrency: {args.concurrency}")
+        logger.info(f"Conversational: {args.conversational}")
         
+        # Run evaluation asynchronously
         async def run_async_evaluation():
-            return await runner.run_evaluation(
-                dataset=dataset,
-                evaluator_types=args.evaluators,
-                use_conversational=args.conversational,
-                max_concurrency=args.concurrency
-            )
+            try:
+                results = await runner.run_evaluation()
+                logger.info(f"Evaluation completed successfully")
+                logger.info(f"Results saved to: {results['report_file']}")
+                return results
+            except Exception as e:
+                logger.error(f"Evaluation failed: {str(e)}")
+                raise
         
-        report = asyncio.run(run_async_evaluation())
-        
-        # 保存报告
-        eval_manager = EvaluationManager()
-        report_file = eval_manager.save_report(report)
-        
-        logger.info(f"评估完成，报告已保存: {report_file}")
+        # Run in event loop
+        asyncio.run(run_async_evaluation())
         
     except Exception as e:
-        logger.error(f"运行评估失败: {str(e)}")
+        logger.error(f"Failed to run evaluation: {str(e)}")
 
 
 def handle_list_reports():
-    """处理列出报告命令"""
+    """Handle list reports command"""
     try:
-        from src.evaluation.runners import EvaluationManager
+        import glob
         
-        eval_manager = EvaluationManager()
-        reports = eval_manager.list_reports()
+        reports_dir = Path("evaluation_reports")
+        if not reports_dir.exists():
+            logger.info("No evaluation reports directory found")
+            return
         
-        if reports:
-            logger.info("评估报告文件:")
-            for report_file in reports:
-                logger.info(f"  - {report_file}")
+        report_files = list(reports_dir.glob("*.json"))
+        
+        if not report_files:
+            logger.info("No evaluation reports found")
         else:
-            logger.info("没有找到评估报告")
+            logger.info("Evaluation reports:")
+            for report_file in sorted(report_files, reverse=True):
+                logger.info(f"  - {report_file.name}")
             
     except Exception as e:
-        logger.error(f"列出报告失败: {str(e)}")
+        logger.error(f"Failed to list reports: {str(e)}")
 
 
 def handle_view_report(args):
-    """处理查看报告命令"""
+    """Handle view report command"""
     try:
-        from src.evaluation.runners import EvaluationManager
+        import json
+        from pathlib import Path
         
-        eval_manager = EvaluationManager()
-        report = eval_manager.load_report(args.file)
+        report_path = Path(args.file)
         
-        if not report:
-            logger.error(f"报告文件不存在: {args.file}")
+        if not report_path.exists():
+            logger.error(f"Report file not found: {args.file}")
             return
         
-        # 显示报告摘要
-        print("=" * 60)
-        print(f"评估报告: {report.dataset_name}")
-        print("=" * 60)
-        print(f"时间戳: {report.timestamp}")
-        print(f"总样例数: {report.total_examples}")
-        print(f"执行时间: {report.execution_time:.2f}秒")
-        print(f"评估器: {', '.join(report.evaluator_names)}")
-        print("\n平均分数:")
+        with open(report_path, 'r', encoding='utf-8') as f:
+            report = json.load(f)
         
-        for evaluator_name, score in report.avg_scores.items():
-            print(f"  {evaluator_name}: {score:.3f}")
+        logger.info(f"Report: {report_path.name}")
+        logger.info("=" * 50)
         
-        print("\n" + "=" * 60)
+        # Print basic information
+        logger.info(f"Dataset: {report.get('dataset', 'Unknown')}")
+        logger.info(f"Timestamp: {report.get('timestamp', 'Unknown')}")
+        logger.info(f"Total Questions: {report.get('total_questions', 0)}")
+        
+        # Print overall scores
+        overall_scores = report.get('overall_scores', {})
+        if overall_scores:
+            logger.info("\nOverall Scores:")
+            for metric, score in overall_scores.items():
+                logger.info(f"  {metric}: {score:.4f}")
+        
+        # Print individual results summary
+        individual_results = report.get('individual_results', [])
+        if individual_results:
+            logger.info(f"\nSample Results (first 3):")
+            for i, result in enumerate(individual_results[:3]):
+                logger.info(f"\nQuestion {i+1}: {result.get('question', '')[:100]}...")
+                logger.info(f"Answer: {result.get('answer', '')[:100]}...")
+                scores = result.get('scores', {})
+                for metric, score in scores.items():
+                    logger.info(f"  {metric}: {score}")
         
     except Exception as e:
-        logger.error(f"查看报告失败: {str(e)}")
+        logger.error(f"Failed to view report: {str(e)}")
 
 
 def handle_evaluation_summary():
-    """处理评估汇总命令"""
+    """Handle evaluation summary command"""
     try:
-        from src.evaluation.runners import EvaluationManager
+        import glob
+        import json
+        from pathlib import Path
+        from collections import defaultdict
         
-        eval_manager = EvaluationManager()
-        report_files = eval_manager.list_reports()
-        
-        reports = []
-        for report_file in report_files:
-            report = eval_manager.load_report(report_file)
-            if report:
-                reports.append(report)
-        
-        if not reports:
-            logger.info("没有找到评估报告")
+        reports_dir = Path("evaluation_reports")
+        if not reports_dir.exists():
+            logger.info("No evaluation reports directory found")
             return
         
-        summary = eval_manager.generate_summary_report(reports)
+        report_files = list(reports_dir.glob("*.json"))
         
-        # 显示汇总信息
-        print("=" * 60)
-        print("评估汇总报告")
-        print("=" * 60)
-        print(f"总报告数: {summary.get('total_reports', 0)}")
-        print(f"评估的数据集: {', '.join(summary.get('datasets_evaluated', []))}")
+        if not report_files:
+            logger.info("No evaluation reports found")
+            return
         
-        print("\n各评估器平均分数:")
-        for evaluator_name, stats in summary.get('avg_scores_by_evaluator', {}).items():
-            print(f"  {evaluator_name}:")
-            print(f"    均值: {stats['mean']:.3f}")
-            print(f"    最小值: {stats['min']:.3f}")
-            print(f"    最大值: {stats['max']:.3f}")
+        # Aggregate statistics
+        dataset_stats = defaultdict(list)
         
-        best = summary.get('best_performing_dataset')
-        if best:
-            print(f"\n表现最好的数据集: {best['name']} (分数: {best['score']:.3f})")
+        for report_file in report_files:
+            try:
+                with open(report_file, 'r', encoding='utf-8') as f:
+                    report = json.load(f)
+                
+                dataset = report.get('dataset', 'Unknown')
+                overall_scores = report.get('overall_scores', {})
+                
+                dataset_stats[dataset].append({
+                    'file': report_file.name,
+                    'timestamp': report.get('timestamp', ''),
+                    'scores': overall_scores
+                })
+                
+            except Exception as e:
+                logger.warning(f"Failed to read report {report_file}: {e}")
         
-        worst = summary.get('worst_performing_dataset')
-        if worst:
-            print(f"表现最差的数据集: {worst['name']} (分数: {worst['score']:.3f})")
+        # Print summary
+        logger.info("Evaluation Summary")
+        logger.info("=" * 50)
         
-        print("=" * 60)
+        for dataset, reports in dataset_stats.items():
+            logger.info(f"\nDataset: {dataset}")
+            logger.info(f"Reports count: {len(reports)}")
+            
+            # Calculate average scores
+            if reports:
+                all_metrics = set()
+                for report in reports:
+                    all_metrics.update(report['scores'].keys())
+                
+                avg_scores = {}
+                for metric in all_metrics:
+                    scores = [r['scores'].get(metric, 0) for r in reports if metric in r['scores']]
+                    if scores:
+                        avg_scores[metric] = sum(scores) / len(scores)
+                
+                logger.info("Average scores:")
+                for metric, score in avg_scores.items():
+                    logger.info(f"  {metric}: {score:.4f}")
         
     except Exception as e:
-        logger.error(f"生成汇总报告失败: {str(e)}")
+        logger.error(f"Failed to generate summary: {str(e)}")
 
 
 def handle_chat_command(args):
-    """处理聊天命令"""
+    """Handle chat command"""
+    logger.info("Starting interactive chat mode...")
+    global main_event_loop
+    
     try:
-        from src.vectorstores.vector_store import VectorStoreManager
-        from src.chains.qa_chain import DocumentQAChain, ConversationalRetrievalChain
-        from src.agents.rag_agent import DocumentQAAgent, ConversationalRetrievalAgent
-        from src.agents.sql_agent import SQLAgent
-        
-        # 检查是否使用动态向量存储 (默认启用，除非明确禁用)
-        use_dynamic = settings.enable_dynamic_vector_store and not getattr(args, 'no_dynamic', False)
-        
+        use_dynamic = not args.no_dynamic
+        vector_manager = None
+
+        # Initialize VectorStoreManager (dynamic or static)
         if use_dynamic:
-            # 使用动态向量存储管理器
-            from src.vectorstores.dynamic_vector_store import DynamicVectorStoreManager
-            
-            # 从配置文件读取设置
-            enable_watching = settings.enable_file_watching
-            enable_mcp = settings.mcp_enabled and settings.mcp_filesystem_enabled
-            
-            vector_manager = DynamicVectorStoreManager(
-                use_openai_embeddings=False,
-                enable_file_watching=enable_watching,
-                enable_mcp=enable_mcp
-            )
-            
-            print(f"🔄 动态向量存储模式 - 文件监控: {'开启' if enable_watching else '关闭'}, MCP: {'开启' if enable_mcp else '关闭'}")
-            
-            # 异步初始化动态向量存储
-            import asyncio
-            
-            async def init_dynamic_vector_store():
-                return await vector_manager.initialize()
-            
-            vector_store = asyncio.run(init_dynamic_vector_store())
-            
-            # 显示状态
-            status = vector_manager.get_status()
-            print(f"📊 动态向量存储状态:")
-            print(f"   - 跟踪文件数: {status['tracked_files_count']}")
-            print(f"   - 文件监控: {'运行中' if status['file_watcher_running'] else '未运行'}")
-            print(f"   - MCP可用: {'是' if status['mcp_available'] else '否'}")
-            
-        else:
-            # 使用标准向量存储管理器
-            vector_manager = VectorStoreManager(use_openai_embeddings=False)
+            logger.info("Attempting to start dynamic vector store...")
+            try:
+                from src.vectorstores.dynamic_vector_store import DynamicVectorStoreManager
+                
+                async def init_dynamic_store():
+                    dynamic_manager = DynamicVectorStoreManager(enable_file_watching=True)
+                    await dynamic_manager.initialize()
+                    return dynamic_manager
+
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_closed():
+                        raise RuntimeError("Event loop is closed")
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                
+                main_event_loop = loop  # Store the loop
+                vector_manager = loop.run_until_complete(init_dynamic_store())
+                logger.info("Dynamic vector store started successfully.")
+                if use_dynamic and hasattr(vector_manager, 'cleanup'):
+                    background_services.append(vector_manager)
+            except Exception as e:
+                logger.error(f"Failed to start dynamic vector store: {e}")
+                logger.info("Falling back to static vector store.")
+                use_dynamic = False # Disable dynamic features if it failed
+        
+        if not use_dynamic:
+            logger.info("Using static vector store.")
+            vector_manager = VectorStoreManager()
             vector_manager.get_or_create_vector_store()
-            print("📚 标准向量存储模式")
-        
-        # 初始化问答系统（Chain或Agent）
-        if args.use_agent:
-            # 使用Agent架构
-            if args.conversational:
-                qa_system = ConversationalRetrievalAgent(vector_store_manager=vector_manager)
-                print("使用对话式检索Agent 🤖")
-            else:
-                use_memory = not args.no_memory
-                qa_system = DocumentQAAgent(
-                    vector_store_manager=vector_manager,
-                    model_name=args.model,
-                    use_memory=use_memory
-                )
-                print(f"使用文档问答Agent 🤖，记忆功能: {'开启' if use_memory else '关闭'}")
-        else:
-            # 使用Chain架构
-            if args.conversational:
-                qa_system = ConversationalRetrievalChain(vector_store_manager=vector_manager)
-                print("使用对话式检索Chain ⛓️")
-            else:
-                use_memory = not args.no_memory
-                qa_system = DocumentQAChain(
-                    vector_store_manager=vector_manager,
-                    model_name=args.model,
-                    use_memory=use_memory
-                )
-                print(f"使用标准问答Chain ⛓️，记忆功能: {'开启' if use_memory else '关闭'}")
-        
-        qa_chain = qa_system  # 保持变量名兼容性
-        
-        # 初始化SQL Agent
-        try:
-            sql_agent = SQLAgent(use_memory=True, verbose=False)
-            sql_available = True
-            print("SQL Agent 初始化成功")
-        except Exception as e:
-            sql_agent = None
-            sql_available = False
-            print(f"SQL Agent 初始化失败: {str(e)}")
-        
-        # 初始化多智能体工作流（如果启用）
-        workflow = None
+
+        # Setup chat based on architecture
         if args.use_workflow:
-            try:
-                # 设置数据库路径
-                sql_db_path = "data/database/erp.db"
-                workflow = MultiAgentWorkflow(
-                    vector_store_manager=vector_manager,
-                    sql_db_path=sql_db_path,
-                    model_name=args.model,
-                    max_iterations=2
-                )
-                print("🔄 多智能体工作流初始化成功")
-            except Exception as e:
-                print(f"多智能体工作流初始化失败: {str(e)}")
-                workflow = None
-        
-        print("\n=== 智能问答系统 ===")
-        if args.use_workflow and workflow:
-            print("🔄 多智能体工作流模式 (Router → SQL/RAG → Answer → Review)")
+            logger.info("Using LangGraph multi-agent workflow...")
+            from src.workflows.multi_agent_workflow import MultiAgentWorkflow
+            workflow = MultiAgentWorkflow(
+                vector_store_manager=vector_manager,
+                model_name=args.model
+            )
+            start_workflow_chat(workflow, args.session, use_dynamic, vector_manager)
+            
         elif args.use_agent:
-            print("🤖 Agent模式")
+            logger.info("Using Agent architecture...")
+            from src.agents.rag_agent import DocumentQAAgent
+            from src.agents.sql_agent import SQLAgent
+            
+            doc_agent = DocumentQAAgent(
+                vector_store_manager=vector_manager,
+                model_name=args.model,
+                use_memory=not args.no_memory
+            )
+            sql_agent = SQLAgent(
+                model_name=args.model,
+                use_memory=not args.no_memory
+            )
+            start_agent_chat(doc_agent, sql_agent, args.session, use_dynamic, vector_manager)
+            
         else:
-            print("⛓️ Chain模式")
-        print("📄 文档问答 | 🗃️ SQL查询")
-        print("输入问题开始对话，输入 'quit' 或 'exit' 退出")
-        print("输入 'clear' 清空记忆")
-        if not args.use_workflow:
-            print("输入 'sql:' 前缀进行SQL查询")
-            print("输入 'mode doc' 切换到文档问答模式")
-            print("输入 'mode sql' 切换到SQL查询模式")
-        print("输入 'status' 查看向量存储状态")
-        print("输入 'sync' 强制同步文件系统")
-        print("输入 'files' 查看跟踪的文件列表")
-        print("=" * 50)
-        
-        session_id = args.session
-        current_mode = "doc"  # 默认文档模式
-        if not args.use_workflow:
-            print(f"当前模式: {'📄 文档问答' if current_mode == 'doc' else '🗃️ SQL查询'}")
-        
-        while True:
-            try:
-                mode_indicator = "📄" if current_mode == "doc" else "🗃️"
-                question = input(f"\n{mode_indicator} 问题: ").strip()
-                
-                if question.lower() in ['quit', 'exit', '退出']:
-                    print("再见！")
-                    break
-                
-                if question.lower() in ['clear', '清空']:
-                    if args.use_workflow and workflow:
-                        # 工作流模式下清空各个组件的记忆
-                        if workflow.rag_agent:
-                            workflow.rag_agent.clear_memory(session_id)
-                        if workflow.sql_agent:
-                            workflow.sql_agent.clear_memory(session_id)
-                    elif current_mode == "doc":
-                        if hasattr(qa_chain, 'clear_memory'):
-                            qa_chain.clear_memory(session_id)
-                        elif hasattr(qa_chain, 'memory_manager'):
-                            qa_chain.memory_manager.clear_memory(session_id)
-                    elif current_mode == "sql" and sql_available:
-                        sql_agent.clear_memory(session_id)
-                    print("记忆已清空")
-                    continue
-                
-                if question.lower() == 'mode doc':
-                    current_mode = "doc"
-                    print("已切换到文档问答模式 📄")
-                    continue
-                
-                if question.lower() == 'mode sql':
-                    if sql_available:
-                        current_mode = "sql"
-                        print("已切换到SQL查询模式 🗃️")
-                    else:
-                        print("SQL Agent不可用")
-                    continue
-                
-                # 向量存储管理命令（动态模式下可用）
-                if use_dynamic:
-                    if question.lower() == 'status':
-                        status = vector_manager.get_status()
-                        print("\n📊 动态向量存储状态:")
-                        print(f"   - 文件监控: {'开启' if status['file_watching_enabled'] else '关闭'}")
-                        print(f"   - MCP支持: {'开启' if status['mcp_enabled'] else '关闭'}")
-                        print(f"   - MCP可用: {'是' if status['mcp_available'] else '否'}")
-                        print(f"   - 文件监控运行: {'是' if status['file_watcher_running'] else '否'}")
-                        print(f"   - 跟踪文件数: {status['tracked_files_count']}")
-                        print(f"   - 处理中文件数: {status['processing_files_count']}")
-                        print(f"   - 最后同步时间: {status['last_sync_time']}")
-                        continue
-                    
-                    if question.lower() == 'sync':
-                        print("🔄 开始强制同步文件系统...")
-                        
-                        async def sync_filesystem():
-                            await vector_manager.force_sync_with_filesystem()
-                        
-                        asyncio.run(sync_filesystem())
-                        print("✅ 文件系统同步完成")
-                        continue
-                    
-                    if question.lower() == 'files':
-                        mapping = vector_manager.get_file_document_mapping()
-                        processing = vector_manager.get_processing_files()
-                        
-                        print(f"\n📁 跟踪的文件 ({len(mapping)} 个):")
-                        for file_path, doc_ids in mapping.items():
-                            status_icon = "🔄" if file_path in processing else "✅"
-                            print(f"   {status_icon} {file_path} ({len(doc_ids)} 个文档)")
-                        
-                        if processing:
-                            print(f"\n🔄 正在处理的文件 ({len(processing)} 个):")
-                            for file_path in processing:
-                                print(f"   - {file_path}")
-                        continue
-                
-                if not question:
-                    continue
-                
-                # 工作流模式处理
-                if args.use_workflow and workflow:
-                    print("🔄 多智能体工作流处理中...")
-                    result = workflow.run(question, session_id=session_id)
-                    
-                    print(f"\n🎯 路由决策: {result['query_type']} - {result['router_reasoning']}")
-                    print(f"📝 答案: {result['answer']}")
-                    print(f"⭐ 审阅得分: {result['review_score']:.1f}/10.0")
-                    print(f"✅ 审阅状态: {'通过' if result['review_approved'] else '未通过'}")
-                    
-                    if result['review_feedback']:
-                        print(f"💡 审阅建议: {result['review_feedback']}")
-                    
-                    if result['iteration_count'] > 1:
-                        print(f"🔄 迭代次数: {result['iteration_count']}")
-                    
-                    # 显示相关文档（如果是RAG查询）
-                    if result.get('retrieved_documents') and result['query_type'] == 'rag':
-                        print(f"\n📚 相关文档({len(result['retrieved_documents'])}个):")
-                        for i, doc in enumerate(result['retrieved_documents'][:2], 1):
-                            source = doc.get('metadata', {}).get('source_file', 'Unknown')
-                            content = doc.get('content', '')[:200] + "..." if len(doc.get('content', '')) > 200 else doc.get('content', '')
-                            print(f"  {i}. 来源: {source}")
-                            print(f"     内容: {content}")
-                    
-                    continue
-                
-                # 处理SQL查询（无论当前模式）
-                if question.lower().startswith('sql:'):
-                    if not sql_available:
-                        print("SQL Agent不可用")
-                        continue
-                    
-                    sql_question = question[4:].strip()
-                    print("🗃️ SQL查询中...")
-                    result = sql_agent.query(sql_question, session_id=session_id)
-                    
-                    print(f"\n答案: {result['answer']}")
-                    if not result['success'] and result.get('error'):
-                        print(f"错误: {result['error']}")
-                    continue
-                
-                # 根据当前模式处理查询
-                if current_mode == "doc":
-                    print("📄 文档检索中...")
-                    
-                    if args.conversational:
-                        if args.use_agent:
-                            # Agent版本：对话式检索Agent
-                            result = qa_chain.invoke(question=question, chat_history=[])
-                        else:
-                            # Chain版本：对话式检索链
-                            result = qa_chain.invoke(question=question, session_id=session_id)
-                    else:
-                        # 标准问答（Agent或Chain）
-                        result = qa_chain.invoke(question, session_id)
-                    
-                    print(f"\n答案: {result['answer']}")
-                    
-                    # 显示Agent的中间步骤（仅Agent版本）
-                    if args.use_agent and result.get('intermediate_steps'):
-                        print(f"\n🤖 Agent执行步骤({len(result['intermediate_steps'])}个):")
-                        for i, step in enumerate(result['intermediate_steps'][:2], 1):
-                            if hasattr(step, '__dict__'):
-                                print(f"  {i}. {step}")
-                            else:
-                                print(f"  {i}. {str(step)[:100]}...")
-                    
-                    # 显示相关文档
-                    if result.get('relevant_documents'):
-                        print(f"\n📚 相关文档({len(result['relevant_documents'])}个):")
-                        for i, doc in enumerate(result['relevant_documents'][:2], 1):
-                            source = doc['metadata'].get('source_file', 'Unknown')
-                            content = doc['content'][:200] + "..." if len(doc['content']) > 200 else doc['content']
-                            print(f"  {i}. 来源: {source}")
-                            print(f"     内容: {content}")
-                
-                elif current_mode == "sql":
-                    if not sql_available:
-                        print("SQL Agent不可用，请切换到文档模式")
-                        continue
-                    
-                    print("🗃️ SQL查询中...")
-                    result = sql_agent.query(question, session_id=session_id)
-                    
-                    print(f"\n答案: {result['answer']}")
-                    if not result['success'] and result.get('error'):
-                        print(f"错误: {result['error']}")
-                
-            except KeyboardInterrupt:
-                print("\n\n程序被中断，再见！")
-                break
-            except Exception as e:
-                logger.error(f"处理问题时出错: {str(e)}")
-                print(f"错误: {str(e)}")
-        
-        # 清理动态向量存储资源
-        if use_dynamic and hasattr(vector_manager, 'cleanup'):
-            print("🧹 清理动态向量存储资源...")
-            asyncio.run(vector_manager.cleanup())
-                
+            # Default to Chain architecture
+            logger.info("Using Chain architecture...")
+            from src.chains.qa_chain import DocumentQAChain, ConversationalRetrievalChain
+            from src.agents.sql_agent import SQLAgent
+            
+            if args.conversational:
+                doc_chain = ConversationalRetrievalChain(
+                    vector_store_manager=vector_manager,
+                    model_name=args.model
+                )
+            else:
+                doc_chain = DocumentQAChain(
+                    vector_store_manager=vector_manager,
+                    model_name=args.model,
+                    use_memory=not args.no_memory
+                )
+            
+            sql_agent = SQLAgent(
+                model_name=args.model,
+                use_memory=not args.no_memory
+            )
+            start_chain_chat(doc_chain, sql_agent, args.session, use_dynamic, vector_manager)
+            
     except Exception as e:
-        logger.error(f"初始化聊天模式失败: {str(e)}")
+        logger.error(f"Failed to start chat mode: {str(e)}")
+        import traceback
+        traceback.print_exc()
+
+
+def start_workflow_chat(workflow, session_id, use_dynamic, vector_manager):
+    """Start LangGraph workflow chat session"""
+    logger.info("🚀 Workflow system started! Type 'help' for available commands.")
+    if use_dynamic:
+        logger.info("📁 Dynamic vector store is active.")
+        logger.info("💡 Commands: help, status, sync, files, quit")
+    else:
+        logger.info("📚 Static vector store mode.")
+        logger.info("💡 Commands: help, quit")
+    print()
+
+    while True:
+        try:
+            user_input = input("👤 You> ").strip()
+            if not user_input:
+                continue
+
+            if user_input.lower() in ['quit', 'exit']:
+                print("👋 Goodbye!")
+                break
+            
+            elif user_input.lower() == 'help':
+                print("\nAvailable commands:")
+                print("  help           - Show this help message")
+                if use_dynamic:
+                    print("  status         - Show vector store status")
+                    print("  sync           - Force sync with filesystem")
+                    print("  files          - List tracked files")
+                print("  quit/exit      - Exit the program")
+                continue
+            
+            if use_dynamic and handle_dynamic_commands(user_input, vector_manager):
+                continue
+
+            print("🤔 Processing with workflow...")
+            try:
+                # Check if the workflow has an async invoke method on its graph attribute
+                if hasattr(workflow.workflow, 'ainvoke'):
+                    result = asyncio.run(workflow.workflow.ainvoke({
+                        "user_question": user_input,
+                        "session_id": session_id
+                    }))
+                else: # Fallback to sync invoke on the graph attribute
+                    result = workflow.workflow.invoke({
+                        "user_question": user_input,
+                        "session_id": session_id
+                    })
+
+                answer = result.get("generated_answer", "No answer generated")
+                print(f"🤖 {answer}")
+                if "query_type" in result:
+                    print(f"🔍 Type: {result['query_type']}, Review Score: {result.get('review_score', 'N/A')}")
+
+            except Exception as e:
+                print(f"❌ Error during workflow execution: {str(e)}")
+                logger.error(f"Workflow error: {str(e)}", exc_info=True)
+            
+            print()
+
+        except KeyboardInterrupt:
+            print("\n👋 Goodbye!")
+            break
+        except Exception as e:
+            print(f"❌ An unexpected error occurred: {str(e)}")
+            logger.error(f"Chat loop error: {str(e)}", exc_info=True)
+
+
+def start_agent_chat(doc_agent, sql_agent, session_id, use_dynamic, vector_manager):
+    """Start Agent chat session"""
+    start_interactive_chat(
+        doc_handler=doc_agent, 
+        sql_handler=sql_agent, 
+        session_id=session_id, 
+        use_dynamic=use_dynamic, 
+        vector_manager=vector_manager,
+        system_name="Agent"
+    )
+
+
+def start_chain_chat(doc_chain, sql_agent, session_id, use_dynamic, vector_manager):
+    """Start Chain chat session"""
+    start_interactive_chat(
+        doc_handler=doc_chain, 
+        sql_handler=sql_agent, 
+        session_id=session_id, 
+        use_dynamic=use_dynamic, 
+        vector_manager=vector_manager,
+        system_name="Chain"
+    )
+
+
+def start_interactive_chat(doc_handler, sql_handler, session_id, use_dynamic, vector_manager, system_name=""):
+    """Generic interactive chat loop for Agent and Chain modes."""
+    current_mode = "doc"
+    logger.info(f"🚀 {system_name} system started! Type 'help' for available commands.")
+    if use_dynamic:
+        logger.info("📁 Dynamic vector store is active.")
+        logger.info("💡 Commands: mode doc, mode sql, help, status, sync, files, clear, quit")
+    else:
+        logger.info("📚 Static vector store mode.")
+        logger.info("💡 Commands: mode doc, mode sql, help, clear, quit")
+    print()
+
+    while True:
+        try:
+            mode_indicator = "📄" if current_mode == "doc" else "🗃️"
+            user_input = input(f"{mode_indicator} {current_mode.upper()}> ").strip()
+            if not user_input:
+                continue
+
+            if user_input.lower() in ['quit', 'exit']:
+                print("👋 Goodbye!")
+                break
+            
+            elif user_input.lower() == 'help':
+                print("\nAvailable commands:")
+                print("  mode doc       - Switch to document Q&A mode")
+                print("  mode sql       - Switch to SQL query mode")
+                print("  help           - Show this help message")
+                if use_dynamic:
+                    print("  status         - Show vector store status")
+                    print("  sync           - Force sync with filesystem")
+                    print("  files          - List tracked files")
+                print("  clear          - Clear current mode memory")
+                print("  quit/exit      - Exit the program")
+                print(f"\nCurrent mode: {current_mode.upper()}")
+                continue
+                
+            elif user_input.lower() == 'mode doc':
+                current_mode = "doc"
+                print("📄 Switched to document Q&A mode")
+                continue
+                
+            elif user_input.lower() == 'mode sql':
+                current_mode = "sql"
+                print("🗃️ Switched to SQL query mode")
+                continue
+                
+            elif user_input.lower() == 'clear':
+                handler = doc_handler if current_mode == "doc" else sql_handler
+                if hasattr(handler, 'clear_memory'):
+                    handler.clear_memory(session_id)
+                    print(f"💭 {current_mode.upper()} mode memory cleared")
+                else:
+                    print("This mode does not support clearing memory.")
+                continue
+
+            if use_dynamic and handle_dynamic_commands(user_input, vector_manager):
+                continue
+            
+            print("🤔 Processing...")
+            try:
+                if current_mode == "doc":
+                    result = doc_handler.invoke(user_input, session_id=session_id)
+                    answer = result.get("answer", result.get("output", "No answer generated"))
+                    print(f"📄 {answer}")
+                    if "relevant_documents" in result and result["relevant_documents"] is not None:
+                        doc_count = len(result["relevant_documents"])
+                        print(f"📚 Found {doc_count} relevant documents")
+                else: # SQL mode
+                    result = sql_handler.query(user_input, session_id=session_id)
+                    answer = result.get("answer", result.get("output", "No answer generated"))
+                    print(f"🗃️ {answer}")
+                    if result.get("success"):
+                        print("✅ Query executed successfully")
+                    elif "error" in result:
+                        print(f"❌ Error: {result['error']}")
+            except Exception as e:
+                print(f"❌ Error: {str(e)}")
+                logger.error(f"{system_name} error: {str(e)}", exc_info=True)
+            
+            print()
+
+        except KeyboardInterrupt:
+            print("\n👋 Goodbye!")
+            break
+        except Exception as e:
+            print(f"❌ An unexpected error occurred: {str(e)}")
+            logger.error(f"Chat loop error: {str(e)}", exc_info=True)
+
+
+def handle_dynamic_commands(user_input, vector_manager):
+    """Handles commands specific to dynamic vector store mode. Returns True if command was handled."""
+    command = user_input.lower()
+
+    if command == 'status':
+        if hasattr(vector_manager, 'get_status'):
+            status = vector_manager.get_status()
+            print("📊 Vector Store Status:")
+            print(f"   - Files tracked: {status.get('files_tracked', 'N/A')}")
+            print(f"   - Documents count: {status.get('documents_count', 'N/A')}")
+            print(f"   - Last sync: {status.get('last_sync', 'N/A')}")
+            processing = status.get('processing_files', [])
+            if processing:
+                print(f"   - Currently processing: {', '.join(processing)}")
+        else:
+            print("📊 Status not available for this vector store manager.")
+        return True
+
+    elif command == 'sync':
+        if hasattr(vector_manager, 'force_sync_with_filesystem'):
+            print("🔄 Syncing with filesystem...")
+            try:
+                asyncio.run(vector_manager.force_sync_with_filesystem())
+                print("✅ Filesystem sync completed")
+            except Exception as e:
+                print(f"❌ Sync failed: {e}")
+        else:
+            print("🔄 Sync functionality not available.")
+        return True
+
+    elif command == 'files':
+        if hasattr(vector_manager, 'get_file_document_mapping'):
+            files = vector_manager.get_file_document_mapping()
+            if files:
+                print("📁 Tracked files:")
+                for file_path, doc_ids in files.items():
+                    print(f"   - {file_path}: {len(doc_ids)} document chunks")
+            else:
+                print("📁 No files currently tracked.")
+        else:
+            print("📁 File listing not available.")
+        return True
+    
+    return False
 
 
 def handle_server_command():
-    """处理服务器命令"""
-    try:
-        import uvicorn
-        from src.api.main import app
-        
-        logger.info("启动API服务器...")
-        uvicorn.run(
-            app,
-            host=settings.api_host,
-            port=settings.api_port,
-            reload=False
-        )
-    except Exception as e:
-        logger.error(f"启动API服务器失败: {str(e)}")
-
+    """Wrapper to start API server"""
+    start_api_server()
 
 def handle_vector_command(args):
-    """处理向量存储命令"""
+    """Wrapper for vector store commands"""
     if not args.vector_action:
-        logger.error("请指定向量存储操作")
+        logger.error("Please specify a vector store action (e.g., 'rebuild', 'info')")
         return
-    
-    try:
-        from src.vectorstores.vector_store import VectorStoreManager
-        
-        if args.vector_action == "rebuild":
-            vector_manager = VectorStoreManager(use_openai_embeddings=False)
-            vector_manager.get_or_create_vector_store(force_recreate=args.force)
-            logger.info("向量存储重建完成")
-            
-        elif args.vector_action == "info":
-            vector_manager = VectorStoreManager(use_openai_embeddings=False)
-            vector_store = vector_manager.get_or_create_vector_store()
-            
-            print("=" * 50)
-            print("向量存储信息")
-            print("=" * 50)
-            print(f"存储路径: {vector_manager.vector_store_path}")
-            print(f"存储类型: {type(vector_store).__name__}")
-            
-            # 尝试获取文档数量
-            try:
-                if hasattr(vector_store, '_collection'):
-                    count = vector_store._collection.count()
-                    print(f"文档数量: {count}")
-                else:
-                    print("文档数量: 无法获取")
-            except:
-                print("文档数量: 无法获取")
-            
-            print("=" * 50)
-            
-        else:
-            logger.error(f"未知的向量存储操作: {args.vector_action}")
-            
-    except Exception as e:
-        logger.error(f"向量存储操作失败: {str(e)}")
 
+    use_openai_emb = settings.embeddings_provider == "openai"
+    
+    if args.vector_action == "rebuild":
+        logger.info(f"Rebuilding vector store (force={args.force})...")
+        build_vector_store(force_rebuild=args.force, use_openai=use_openai_emb)
+        logger.info("Vector store rebuild completed.")
+    
+    elif args.vector_action == "info":
+        logger.info("Vector store information:")
+        vector_store = VectorStoreManager(use_openai_embeddings=use_openai_emb)
+        vector_store.load_vector_store()
+        if vector_store.vector_store:
+            num_docs = vector_store.vector_store.index.ntotal
+            logger.info(f"  - Number of documents: {num_docs}")
+            logger.info(f"  - Store location: {vector_store.get_store_path('default')}")
+        else:
+            logger.warning("Could not load vector store to get info.")
 
 if __name__ == "__main__":
     main() 

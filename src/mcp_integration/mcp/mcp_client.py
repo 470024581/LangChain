@@ -9,10 +9,10 @@ logger = logging.getLogger(__name__)
 
 
 class MCPFilesystemClient:
-    """LangChain MCP Filesystem客户端"""
+    """LangChain MCP Filesystem Client"""
     
     def __init__(self, allowed_directories: List[str] = None):
-        """初始化LangChain MCP Filesystem客户端"""
+        """Initialize LangChain MCP Filesystem Client"""
         self.allowed_directories = allowed_directories or [
             str(Path(settings.data_directory).absolute()),
             str(Path(settings.vector_store_path).absolute()),
@@ -21,7 +21,7 @@ class MCPFilesystemClient:
         self.is_connected = False
         self.mcp_client: Optional[Any] = None
         
-        # 配置MCP文件系统服务器
+        # Configure MCP filesystem server
         self.mcp_config = {
             "filesystem": {
                 "command": "npx",
@@ -31,59 +31,59 @@ class MCPFilesystemClient:
             }
         }
         
-        logger.info(f"LangChain MCP Filesystem客户端初始化，允许访问目录: {self.allowed_directories}")
+        logger.info(f"LangChain MCP Filesystem client initialized, allowed directories: {self.allowed_directories}")
     
     async def connect(self) -> bool:
-        """连接到MCP服务器"""
+        """Connect to MCP server"""
         try:
-            logger.info("正在使用LangChain MCP适配器连接到文件系统服务器...")
+            logger.info("Connecting to filesystem server using LangChain MCP adapter...")
             
-            # 延迟导入避免循环导入
+            # Delayed import to avoid circular imports
             from langchain_mcp_adapters.client import MultiServerMCPClient
             
-            # 创建LangChain MCP客户端
+            # Create LangChain MCP client
             self.mcp_client = MultiServerMCPClient(self.mcp_config)
             
-            # 测试连接（通过获取工具列表）
+            # Test connection (by getting tool list)
             tools = await self.mcp_client.get_tools()
-            logger.info(f"成功连接，找到 {len(tools)} 个MCP工具")
+            logger.info(f"Successfully connected, found {len(tools)} MCP tools")
             
             self.is_connected = True
-            logger.info("LangChain MCP Filesystem客户端连接成功")
+            logger.info("LangChain MCP Filesystem client connected successfully")
             return True
             
         except Exception as e:
-            logger.error(f"LangChain MCP Filesystem客户端连接失败: {str(e)}")
+            logger.error(f"LangChain MCP Filesystem client connection failed: {str(e)}")
             self.is_connected = False
             return False
     
     async def disconnect(self):
-        """断开MCP连接"""
+        """Disconnect MCP connection"""
         if self.is_connected and self.mcp_client:
             try:
-                # MultiServerMCPClient会自动处理清理
-                logger.info("断开LangChain MCP Filesystem连接")
+                # MultiServerMCPClient handles cleanup automatically
+                logger.info("Disconnecting LangChain MCP Filesystem connection")
                 self.is_connected = False
                 self.mcp_client = None
             except Exception as e:
-                logger.error(f"断开连接时发生错误: {str(e)}")
+                logger.error(f"Error occurred during disconnection: {str(e)}")
     
     async def get_tools(self) -> List:
-        """获取MCP工具列表"""
+        """Get MCP tool list"""
         if not self.is_connected or not self.mcp_client:
-            logger.warning("MCP客户端未连接")
+            logger.warning("MCP client not connected")
             return []
         
         try:
             tools = await self.mcp_client.get_tools()
-            logger.info(f"获取到 {len(tools)} 个MCP工具")
+            logger.info(f"Retrieved {len(tools)} MCP tools")
             return tools
         except Exception as e:
-            logger.error(f"获取MCP工具失败: {str(e)}")
+            logger.error(f"Failed to get MCP tools: {str(e)}")
             return []
     
     def _is_allowed_directory(self, directory: Path) -> bool:
-        """检查目录是否在允许访问的范围内"""
+        """Check if directory is within allowed access range"""
         directory_abs = directory.resolve()
         
         for allowed_dir in self.allowed_directories:
@@ -98,10 +98,10 @@ class MCPFilesystemClient:
 
 
 class MCPFilesystemManager:
-    """LangChain MCP Filesystem管理器"""
+    """LangChain MCP Filesystem Manager"""
     
     def __init__(self):
-        """初始化LangChain MCP Filesystem管理器"""
+        """Initialize LangChain MCP Filesystem Manager"""
         self.client: Optional[MCPFilesystemClient] = None
         self.is_enabled = getattr(settings, 'mcp_enabled', False)
         self.filesystem_enabled = getattr(settings, 'mcp_filesystem_enabled', False)
@@ -111,9 +111,9 @@ class MCPFilesystemManager:
             self.client = MCPFilesystemClient(allowed_directories=allowed_dirs)
     
     async def initialize(self) -> bool:
-        """初始化MCP连接"""
+        """Initialize MCP connection"""
         if not self.is_enabled or not self.filesystem_enabled:
-            logger.info("LangChain MCP Filesystem未启用")
+            logger.info("LangChain MCP Filesystem not enabled")
             return False
         
         if self.client:
@@ -122,23 +122,23 @@ class MCPFilesystemManager:
         return False
     
     async def cleanup(self):
-        """清理MCP连接"""
+        """Clean up MCP connection"""
         if self.client:
             await self.client.disconnect()
     
     async def get_tools(self) -> List:
-        """获取MCP工具"""
+        """Get MCP tools"""
         if self.client and self.client.is_connected:
             return await self.client.get_tools()
         return []
     
     def is_available(self) -> bool:
-        """检查LangChain MCP Filesystem是否可用"""
+        """Check if LangChain MCP Filesystem is available"""
         return (self.client is not None and 
                 self.client.is_connected and 
                 self.is_enabled and 
                 self.filesystem_enabled)
 
 
-# 创建全局MCP管理器实例
+# Create global MCP manager instance
 mcp_manager = MCPFilesystemManager() 

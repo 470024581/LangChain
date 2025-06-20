@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentLoaderManager:
-    """文档加载和处理管理器"""
+    """Document loading and processing manager"""
     
     def __init__(self):
         self.text_splitter = RecursiveCharacterTextSplitter(
@@ -29,7 +29,7 @@ class DocumentLoaderManager:
             separators=["\n\n", "\n", "。", ".", " ", ""]
         )
         
-        # 支持的文件类型映射
+        # Supported file type mapping
         self.loader_mapping = {
             '.pdf': PyPDFLoader,
             '.docx': Docx2txtLoader,
@@ -42,13 +42,13 @@ class DocumentLoaderManager:
         }
     
     def load_documents_from_directory(self, directory_path: str = None) -> List[Document]:
-        """从指定目录加载所有支持的文档"""
+        """Load all supported documents from specified directory"""
         if directory_path is None:
             directory_path = settings.data_directory
             
         directory = Path(directory_path)
         if not directory.exists():
-            logger.error(f"目录不存在: {directory_path}")
+            logger.error(f"Directory does not exist: {directory_path}")
             return []
         
         all_documents = []
@@ -58,27 +58,27 @@ class DocumentLoaderManager:
                 try:
                     documents = self.load_single_file(str(file_path))
                     all_documents.extend(documents)
-                    logger.info(f"成功加载文件: {file_path}, 文档片段数: {len(documents)}")
+                    logger.info(f"Successfully loaded file: {file_path}, document chunks: {len(documents)}")
                 except Exception as e:
-                    logger.error(f"加载文件失败 {file_path}: {str(e)}")
+                    logger.error(f"Failed to load file {file_path}: {str(e)}")
         
-        logger.info(f"总共加载 {len(all_documents)} 个文档片段")
+        logger.info(f"Total loaded {len(all_documents)} document chunks")
         return all_documents
     
     def load_single_file(self, file_path: str) -> List[Document]:
-        """加载单个文件"""
+        """Load single file"""
         path = Path(file_path)
         if not path.exists():
-            raise FileNotFoundError(f"文件不存在: {file_path}")
+            raise FileNotFoundError(f"File does not exist: {file_path}")
         
         file_extension = path.suffix.lower()
         if file_extension not in self.loader_mapping:
-            raise ValueError(f"不支持的文件类型: {file_extension}")
+            raise ValueError(f"Unsupported file type: {file_extension}")
         
         loader_class = self.loader_mapping[file_extension]
         
         try:
-            # 特殊处理需要编码参数的加载器
+            # Special handling for loaders that need encoding parameter
             if file_extension in ['.txt', '.md']:
                 loader = loader_class(file_path, encoding='utf-8')
             else:
@@ -86,7 +86,7 @@ class DocumentLoaderManager:
             
             documents = loader.load()
             
-            # 为文档添加元数据
+            # Add metadata to documents
             for doc in documents:
                 doc.metadata.update({
                     'source_file': str(path.name),
@@ -94,19 +94,19 @@ class DocumentLoaderManager:
                     'file_type': file_extension
                 })
             
-            # 分割文档
+            # Split documents
             split_documents = self.text_splitter.split_documents(documents)
             
             return split_documents
             
         except Exception as e:
-            logger.error(f"加载文件时出错 {file_path}: {str(e)}")
+            logger.error(f"Error loading file {file_path}: {str(e)}")
             raise
     
     def get_supported_extensions(self) -> List[str]:
-        """获取支持的文件扩展名列表"""
+        """Get list of supported file extensions"""
         return list(self.loader_mapping.keys())
     
     def is_supported_file(self, file_path: str) -> bool:
-        """检查文件是否为支持的类型"""
+        """Check if file is a supported type"""
         return Path(file_path).suffix.lower() in self.loader_mapping 

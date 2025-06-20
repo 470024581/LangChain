@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class LLMFactory:
-    """大语言模型工厂类"""
+    """Large Language Model factory class"""
     
     @staticmethod
     def create_ollama_llm(
@@ -20,15 +20,15 @@ class LLMFactory:
         **kwargs
     ) -> ChatOllama:
         """
-        创建Ollama LLM实例
+        Create Ollama LLM instance
         
         Args:
-            model_name: 模型名称，默认使用配置中的模型
-            temperature: 温度参数
-            **kwargs: 其他参数
+            model_name: Model name, defaults to model in configuration
+            temperature: Temperature parameter
+            **kwargs: Other parameters
         
         Returns:
-            ChatOllama: LLM实例
+            ChatOllama: LLM instance
         """
         if model_name is None:
             model_name = settings.ollama_model
@@ -40,10 +40,10 @@ class LLMFactory:
                 temperature=temperature,
                 **kwargs
             )
-            logger.info(f"成功创建Ollama LLM: {model_name} at {settings.ollama_base_url}")
+            logger.info(f"Successfully created Ollama LLM: {model_name} at {settings.ollama_base_url}")
             return llm
         except Exception as e:
-            logger.error(f"创建Ollama LLM失败: {str(e)}")
+            logger.error(f"Failed to create Ollama LLM: {str(e)}")
             raise
     
     @staticmethod
@@ -54,16 +54,16 @@ class LLMFactory:
         **kwargs
     ) -> ChatOpenAI:
         """
-        创建OpenRouter LLM实例
+        Create OpenRouter LLM instance
         
         Args:
-            model_name: 模型名称，默认使用配置中的模型
-            temperature: 温度参数，控制输出随机性
-            max_tokens: 最大输出token数
-            **kwargs: 其他参数
+            model_name: Model name, defaults to model in configuration
+            temperature: Temperature parameter, controls output randomness
+            max_tokens: Maximum output token count
+            **kwargs: Other parameters
         
         Returns:
-            ChatOpenAI: LLM实例
+            ChatOpenAI: LLM instance
         """
         if model_name is None:
             model_name = settings.default_model
@@ -78,16 +78,16 @@ class LLMFactory:
                 **kwargs
             )
             
-            logger.info(f"成功创建OpenRouter LLM: {model_name}")
+            logger.info(f"Successfully created OpenRouter LLM: {model_name}")
             return llm
             
         except Exception as e:
-            logger.error(f"创建OpenRouter LLM失败: {str(e)}")
+            logger.error(f"Failed to create OpenRouter LLM: {str(e)}")
             raise
     
     @staticmethod
     def get_available_models() -> Dict[str, str]:
-        """获取可用的模型列表"""
+        """Get list of available models"""
         return {
             "gpt-4o-mini": "OpenAI GPT-4o Mini",
             "gpt-4o": "OpenAI GPT-4o",
@@ -105,18 +105,18 @@ class LLMFactory:
         **kwargs
     ) -> BaseLanguageModel:
         """
-        根据配置创建LLM实例，支持重试
+        Create LLM instance based on configuration, with retry support
         
         Args:
-            model_name: 模型名称
-            max_retries: 最大重试次数
-            **kwargs: 其他参数
+            model_name: Model name
+            max_retries: Maximum retry count
+            **kwargs: Other parameters
             
         Returns:
-            BaseLanguageModel: LLM实例
+            BaseLanguageModel: LLM instance
         """
         provider = settings.llm_provider.lower()
-        logger.info(f"使用LLM提供商: {provider}")
+        logger.info(f"Using LLM provider: {provider}")
 
         for attempt in range(max_retries):
             try:
@@ -125,17 +125,17 @@ class LLMFactory:
                 elif provider == "openrouter":
                     return LLMFactory.create_openrouter_llm(model_name, **kwargs)
                 else:
-                    raise ValueError(f"不支持的LLM提供商: {settings.llm_provider}")
+                    raise ValueError(f"Unsupported LLM provider: {settings.llm_provider}")
             except Exception as e:
-                logger.warning(f"创建LLM失败，尝试 {attempt + 1}/{max_retries}: {str(e)}")
+                logger.warning(f"Failed to create LLM, attempt {attempt + 1}/{max_retries}: {str(e)}")
                 if attempt == max_retries - 1:
                     raise
         
-        raise RuntimeError("创建LLM失败，已达到最大重试次数")
+        raise RuntimeError("Failed to create LLM, maximum retry count reached")
 
 
 class LLMManager:
-    """LLM管理器，提供单例模式的LLM访问"""
+    """LLM manager, providing singleton access to LLM"""
     
     _instance: Optional['LLMManager'] = None
     _llm: Optional[BaseLanguageModel] = None
@@ -146,19 +146,19 @@ class LLMManager:
         return cls._instance
     
     def get_llm(self, model_name: str = None, **kwargs) -> BaseLanguageModel:
-        """获取LLM实例（单例模式）"""
-        # 强制刷新LLM如果提供商或模型名称改变
+        """Get LLM instance (singleton pattern)"""
+        # Force refresh LLM if provider or model name changes
         provider_changed = getattr(self._llm, '_provider', None) != settings.llm_provider.lower()
         model_changed = model_name and model_name != getattr(self._llm, 'model', 'unknown')
 
         if self._llm is None or provider_changed or model_changed:
             self._llm = LLMFactory.create_llm(model_name, **kwargs)
-            # 附加提供商信息以便于检查
+            # Attach provider information for checking
             self._llm._provider = settings.llm_provider.lower()
         return self._llm
     
     def refresh_llm(self, model_name: str = None, **kwargs) -> BaseLanguageModel:
-        """刷新LLM实例"""
+        """Refresh LLM instance"""
         self._llm = LLMFactory.create_llm(model_name, **kwargs)
         self._llm._provider = settings.llm_provider.lower()
         return self._llm 

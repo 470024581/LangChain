@@ -4,19 +4,19 @@ from typing import List, Dict, Any
 
 
 class PromptTemplateManager:
-    """提示词模板管理器"""
+    """Prompt template manager"""
     
     @staticmethod
     def get_qa_prompt() -> PromptTemplate:
-        """获取基础问答提示词模板"""
-        template = """根据以下上下文信息回答问题。如果上下文信息中没有相关内容，请明确说明无法从提供的文档中找到答案。
+        """Get basic Q&A prompt template"""
+        template = """Answer the question based on the following context information. If there is no relevant content in the context information, please clearly state that the answer cannot be found in the provided documents.
 
-上下文信息:
+Context Information:
 {context}
 
-问题: {question}
+Question: {question}
 
-请基于上下文信息提供准确、详细的回答:"""
+Please provide an accurate and detailed answer based on the context information:"""
         
         return PromptTemplate(
             template=template,
@@ -25,17 +25,17 @@ class PromptTemplateManager:
     
     @staticmethod
     def get_chat_qa_prompt() -> ChatPromptTemplate:
-        """获取对话式问答提示词模板（支持历史对话）"""
-        system_message = """你是一个专业的文档问答助手。请根据提供的上下文信息回答用户的问题。
+        """Get conversational Q&A prompt template (supports chat history)"""
+        system_message = """You are a professional document Q&A assistant. Please answer user questions based on the provided context information.
 
-回答要求：
-1. 基于提供的上下文信息进行回答
-2. 如果上下文中没有相关信息，请明确说明
-3. 保持回答的准确性和相关性
-4. 考虑之前的对话历史来提供连贯的回答
-5. 用中文回答
+Answer Requirements:
+1. Answer based on the provided context information
+2. If there is no relevant information in the context, please clearly state so
+3. Maintain accuracy and relevance of the answer
+4. Consider previous conversation history to provide coherent answers
+5. Answer in English
 
-上下文信息:
+Context Information:
 {context}"""
 
         return ChatPromptTemplate.from_messages([
@@ -46,13 +46,13 @@ class PromptTemplateManager:
     
     @staticmethod
     def get_summarization_prompt() -> PromptTemplate:
-        """获取文档摘要提示词模板"""
-        template = """请对以下文档内容进行摘要，提取主要信息和关键点：
+        """Get document summarization prompt template"""
+        template = """Please summarize the following document content and extract the main information and key points:
 
-文档内容:
+Document Content:
 {text}
 
-摘要:"""
+Summary:"""
         
         return PromptTemplate(
             template=template,
@@ -61,16 +61,15 @@ class PromptTemplateManager:
     
     @staticmethod
     def get_standalone_question_prompt() -> PromptTemplate:
-        """获取独立问题重构提示词模板"""
-        template = """根据对话历史和最新的用户问题，将用户问题重新表述为一个独立的、完整的问题，
-不需要参考对话历史就能理解的问题。
+        """Get standalone question reconstruction prompt template"""
+        template = """Based on the conversation history and the latest user question, rephrase the user question as an independent, complete question that can be understood without referring to the conversation history.
 
-对话历史:
+Conversation History:
 {chat_history}
 
-最新问题: {question}
+Latest Question: {question}
 
-独立问题:"""
+Standalone Question:"""
         
         return PromptTemplate(
             template=template,
@@ -79,13 +78,10 @@ class PromptTemplateManager:
     
     @staticmethod
     def get_multi_query_prompt() -> PromptTemplate:
-        """获取多查询生成提示词模板"""
-        template = """你是一个AI语言模型助手。你的任务是生成3个不同版本的用户问题，
-以便从向量数据库中检索相关文档。通过生成多个角度的问题，
-你的目标是帮助用户克服基于距离的相似性搜索的一些限制。
-请用换行符分隔这些备选问题。
+        """Get multi-query generation prompt template"""
+        template = """You are an AI language model assistant. Your task is to generate 3 different versions of the user question to retrieve relevant documents from a vector database. By generating multiple perspectives of the question, your goal is to help the user overcome some of the limitations of distance-based similarity search. Please separate these alternative questions with newlines.
 
-原始问题: {question}"""
+Original Question: {question}"""
         
         return PromptTemplate(
             template=template,
@@ -97,7 +93,7 @@ class PromptTemplateManager:
         template: str,
         input_variables: List[str]
     ) -> PromptTemplate:
-        """创建自定义提示词模板"""
+        """Create custom prompt template"""
         return PromptTemplate(
             template=template,
             input_variables=input_variables
@@ -105,15 +101,15 @@ class PromptTemplateManager:
     
     @staticmethod
     def get_context_compression_prompt() -> PromptTemplate:
-        """获取上下文压缩提示词模板"""
-        template = """根据用户的问题，从以下文档片段中提取最相关的信息：
+        """Get context compression prompt template"""
+        template = """Based on the user's question, extract the most relevant information from the following document fragments:
 
-问题: {question}
+Question: {question}
 
-文档片段:
+Document Fragments:
 {context}
 
-请只返回与问题直接相关的信息，去除无关内容:"""
+Please return only information directly relevant to the question, removing irrelevant content:"""
         
         return PromptTemplate(
             template=template,
@@ -122,32 +118,32 @@ class PromptTemplateManager:
 
 
 class PromptFormatter:
-    """提示词格式化工具"""
+    """Prompt formatting tool"""
     
     @staticmethod
     def format_documents(docs: List[Any]) -> str:
-        """格式化文档列表为字符串"""
+        """Format document list as string"""
         if not docs:
-            return "没有找到相关文档。"
+            return "No relevant documents found."
         
         formatted_docs = []
         for i, doc in enumerate(docs, 1):
             content = doc.page_content if hasattr(doc, 'page_content') else str(doc)
             source = doc.metadata.get('source_file', 'Unknown') if hasattr(doc, 'metadata') else 'Unknown'
-            formatted_docs.append(f"文档 {i} (来源: {source}):\n{content}")
+            formatted_docs.append(f"Document {i} (Source: {source}):\n{content}")
         
         return "\n\n".join(formatted_docs)
     
     @staticmethod
     def format_chat_history(messages: List[BaseMessage]) -> str:
-        """格式化聊天历史"""
+        """Format chat history"""
         if not messages:
-            return "无对话历史"
+            return "No conversation history"
         
         formatted_history = []
         for message in messages:
             if hasattr(message, 'type'):
-                role = "用户" if message.type == "human" else "助手"
+                role = "User" if message.type == "human" else "Assistant"
                 formatted_history.append(f"{role}: {message.content}")
             else:
                 formatted_history.append(str(message))
@@ -156,8 +152,8 @@ class PromptFormatter:
     
     @staticmethod
     def truncate_text(text: str, max_length: int = 4000) -> str:
-        """截断文本到指定长度"""
+        """Truncate text to specified length"""
         if len(text) <= max_length:
             return text
         
-        return text[:max_length] + "...[文本已截断]" 
+        return text[:max_length] + "...[Text truncated]" 

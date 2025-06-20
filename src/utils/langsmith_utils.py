@@ -1,5 +1,5 @@
 """
-LangSmith 集成工具模块
+LangSmith integration utility module
 """
 
 import os
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class LangSmithManager:
-    """LangSmith 管理器"""
+    """LangSmith manager"""
     
     def __init__(self):
         self.client: Optional[Client] = None
@@ -26,72 +26,72 @@ class LangSmithManager:
         self._initialize()
     
     def _initialize(self):
-        """初始化 LangSmith 连接"""
+        """Initialize LangSmith connection"""
         try:
-            # 检查是否有LangSmith API密钥
+            # Check if LangSmith API key exists
             if not settings.langsmith_api_key:
-                logger.info("LangSmith API密钥未设置，跳过LangSmith初始化")
+                logger.info("LangSmith API key not set, skipping LangSmith initialization")
                 self._is_enabled = False
                 return
                 
             if settings.langchain_tracing_v2 and settings.langsmith_api_key:
-                # 强制设置环境变量（临时调试）
+                # Force set environment variables (temporary debugging)
                 os.environ["LANGCHAIN_TRACING_V2"] = "true"
                 os.environ["LANGSMITH_API_KEY"] = settings.langsmith_api_key
                 os.environ["LANGCHAIN_PROJECT"] = settings.langchain_project
                 os.environ["LANGCHAIN_ENDPOINT"] = settings.langchain_endpoint
                 
-                logger.info(f"强制设置环境变量: PROJECT={settings.langchain_project}")
+                logger.info(f"Force set environment variable: PROJECT={settings.langchain_project}")
                 
-                # 初始化客户端
+                # Initialize client
                 self.client = Client(
                     api_url=settings.langchain_endpoint,
                     api_key=settings.langsmith_api_key
                 )
                 
-                # 初始化追踪器
+                # Initialize tracer
                 self.tracer = LangChainTracer(
                     project_name=settings.langchain_project,
                     client=self.client
                 )
                 
                 self._is_enabled = True
-                logger.info(f"LangSmith 已启用，项目: {settings.langchain_project}")
+                logger.info(f"LangSmith enabled, project: {settings.langchain_project}")
                 
-                # 测试连接
+                # Test connection
                 self._test_connection()
                 
             else:
-                logger.info("LangSmith 未启用")
+                logger.info("LangSmith not enabled")
                 self._is_enabled = False
                 
         except Exception as e:
-            logger.warning(f"LangSmith 初始化失败，将禁用追踪: {str(e)}")
+            logger.warning(f"LangSmith initialization failed, will disable tracing: {str(e)}")
             self._is_enabled = False
     
     def _test_connection(self):
-        """测试 LangSmith 连接"""
+        """Test LangSmith connection"""
         try:
             if self.client:
-                # 尝试获取项目信息
+                # Try to get project information
                 projects = list(self.client.list_projects(limit=1))
-                logger.info("LangSmith 连接测试成功")
+                logger.info("LangSmith connection test successful")
         except Exception as e:
-            logger.warning(f"LangSmith 连接测试失败: {str(e)}")
+            logger.warning(f"LangSmith connection test failed: {str(e)}")
     
     @property
     def is_enabled(self) -> bool:
-        """检查 LangSmith 是否启用"""
+        """Check if LangSmith is enabled"""
         return self._is_enabled
     
     def get_callback_manager(self) -> Optional[CallbackManager]:
-        """获取回调管理器"""
+        """Get callback manager"""
         if self.is_enabled and self.tracer:
             return CallbackManager([self.tracer])
         return None
     
     def get_callbacks(self) -> list:
-        """获取回调列表"""
+        """Get callbacks list"""
         if self.is_enabled and self.tracer:
             return [self.tracer]
         return []
@@ -103,7 +103,7 @@ class LangSmithManager:
         run_type: str = "chain",
         **kwargs
     ):
-        """创建运行记录"""
+        """Create run record"""
         if not self.is_enabled or not self.client:
             return None
         
@@ -116,11 +116,11 @@ class LangSmithManager:
                 **kwargs
             )
         except Exception as e:
-            logger.error(f"创建 LangSmith 运行记录失败: {str(e)}")
+            logger.error(f"Failed to create LangSmith run record: {str(e)}")
             return None
     
     def update_run(self, run_id: str, outputs: Dict[str, Any], **kwargs):
-        """更新运行记录"""
+        """Update run record"""
         if not self.is_enabled or not self.client:
             return
         
@@ -131,7 +131,7 @@ class LangSmithManager:
                 **kwargs
             )
         except Exception as e:
-            logger.error(f"更新 LangSmith 运行记录失败: {str(e)}")
+            logger.error(f"Failed to update LangSmith run record: {str(e)}")
     
     def log_feedback(
         self, 
@@ -140,7 +140,7 @@ class LangSmithManager:
         score: float, 
         comment: Optional[str] = None
     ):
-        """记录反馈"""
+        """Log feedback"""
         if not self.is_enabled or not self.client:
             return
         
@@ -151,12 +151,12 @@ class LangSmithManager:
                 score=score,
                 comment=comment
             )
-            logger.info(f"LangSmith 反馈已记录: {key}={score}")
+            logger.info(f"LangSmith feedback logged: {key}={score}")
         except Exception as e:
-            logger.error(f"记录 LangSmith 反馈失败: {str(e)}")
+            logger.error(f"Failed to log LangSmith feedback: {str(e)}")
 
 
-# 全局 LangSmith 管理器实例
+# Global LangSmith manager instance
 langsmith_manager = LangSmithManager()
 
 
@@ -166,12 +166,12 @@ def with_langsmith_tracing(
     metadata: Optional[dict] = None
 ):
     """
-    装饰器：为函数添加 LangSmith 追踪
+    Decorator: Add LangSmith tracing to function
     
     Args:
-        name: 运行名称
-        tags: 标签列表
-        metadata: 元数据
+        name: Run name
+        tags: Tag list
+        metadata: Metadata
     """
     def decorator(func):
         @wraps(func)
@@ -181,7 +181,7 @@ def with_langsmith_tracing(
             
             run_name = name or f"{func.__module__}.{func.__name__}"
             
-            # 创建运行记录
+            # Create run record
             run = langsmith_manager.create_run(
                 name=run_name,
                 inputs={"args": str(args), "kwargs": str(kwargs)},
@@ -191,21 +191,21 @@ def with_langsmith_tracing(
             )
             
             try:
-                # 执行函数
+                # Execute function
                 result = func(*args, **kwargs)
                 
-                # 更新运行记录
+                # Update run record
                 if run:
                     langsmith_manager.update_run(
                         run_id=run.id,
                         outputs={"result": str(result)},
-                        end_time=None  # 自动设置结束时间
+                        end_time=None  # Automatically set end time
                     )
                 
                 return result
                 
             except Exception as e:
-                # 记录错误
+                # Log error
                 if run:
                     langsmith_manager.update_run(
                         run_id=run.id,
@@ -219,7 +219,7 @@ def with_langsmith_tracing(
 
 
 def get_langsmith_config() -> Dict[str, Any]:
-    """获取 LangSmith 配置信息"""
+    """Get LangSmith configuration information"""
     return {
         "enabled": langsmith_manager.is_enabled,
         "project": settings.langchain_project,

@@ -16,84 +16,84 @@ logger = logging.getLogger(__name__)
 
 
 class VectorStoreManager:
-    """向量存储管理器"""
+    """Vector store manager"""
     
     def __init__(self, use_openai_embeddings: bool = False):
         """
-        初始化向量存储管理器
+        Initialize vector store manager
         
         Args:
-            use_openai_embeddings: 是否使用OpenAI embeddings，否则使用HuggingFace
+            use_openai_embeddings: Whether to use OpenAI embeddings, otherwise use HuggingFace
         """
         self.vector_store_path = Path(settings.vector_store_path)
         self.vector_store_path.mkdir(parents=True, exist_ok=True)
         
-        # 初始化嵌入模型
+        # Initialize embedding model
         if use_openai_embeddings:
             try:
                 self.embeddings = OpenAIEmbeddings(
                     openai_api_key=settings.openrouter_api_key,
                     openai_api_base=settings.openrouter_api_base
                 )
-                logger.info("使用OpenAI embeddings")
+                logger.info("Using OpenAI embeddings")
             except Exception as e:
-                logger.warning(f"OpenAI embeddings初始化失败: {e}, 切换到HuggingFace")
+                logger.warning(f"OpenAI embeddings initialization failed: {e}, switching to HuggingFace")
                 self.embeddings = HuggingFaceEmbeddings(
                     model_name=settings.embedding_model_name
                 )
-                logger.info("使用HuggingFace embeddings")
+                logger.info("Using HuggingFace embeddings")
         else:
             self.embeddings = HuggingFaceEmbeddings(
                 model_name=settings.embedding_model_name
             )
-            logger.info("使用HuggingFace embeddings")
+            logger.info("Using HuggingFace embeddings")
         
         self.vector_store: Optional[FAISS] = None
         self.document_loader = DocumentLoaderManager()
     
     def create_vector_store(self, documents: List[Document] = None) -> FAISS:
-        """创建向量存储"""
+        """Create vector store"""
         if documents is None:
-            logger.info("加载文档...")
+            logger.info("Loading documents...")
             documents = self.document_loader.load_documents_from_directory()
         
         if not documents:
-            raise ValueError("没有找到可用的文档")
+            raise ValueError("No available documents found")
         
-        logger.info(f"创建向量存储，文档数量: {len(documents)}")
+        logger.info(f"Creating vector store, document count: {len(documents)}")
         
         try:
             self.vector_store = FAISS.from_documents(
                 documents=documents,
                 embedding=self.embeddings
             )
-            logger.info("向量存储创建成功")
+            logger.info("Vector store created successfully")
             return self.vector_store
         except Exception as e:
-            logger.error(f"创建向量存储失败: {str(e)}")
+            logger.error(f"Failed to create vector store: {str(e)}")
             raise
     
     def save_vector_store(self, store_name: str = "default") -> None:
-        """保存向量存储到本地"""
+        """Save vector store to local"""
         if self.vector_store is None:
-            raise ValueError("向量存储未初始化")
+            raise ValueError("Vector store not initialized")
         
         store_path = self.vector_store_path / store_name
         store_path.mkdir(parents=True, exist_ok=True)
         
         try:
             self.vector_store.save_local(str(store_path))
-            logger.info(f"向量存储已保存到: {store_path}")
+            logger.info(f"Vector store saved to: {store_path}")
         except Exception as e:
-            logger.error(f"保存向量存储失败: {str(e)}")
+            logger.error(f"Failed to save vector store: {str(e)}")
             raise
     
     def load_vector_store(self, store_name: str = "default") -> FAISS:
-        """从本地加载向量存储"""
+        """Load vector store from local"""
         store_path = self.vector_store_path / store_name
         
         if not store_path.exists():
-            logger.warning(f"向量存储不存在: {store_path}")
+            logger.warning(f"Vector store does not exist: {store_path}")
             return None
         
         try:
@@ -102,33 +102,33 @@ class VectorStoreManager:
                 embeddings=self.embeddings,
                 allow_dangerous_deserialization=True
             )
-            logger.info(f"向量存储已从 {store_path} 加载")
+            logger.info(f"Vector store loaded from {store_path}")
             return self.vector_store
         except Exception as e:
-            logger.error(f"加载向量存储失败: {str(e)}")
+            logger.error(f"Failed to load vector store: {str(e)}")
             raise
     
     def get_or_create_vector_store(self, store_name: str = "default", force_recreate: bool = False) -> FAISS:
-        """获取或创建向量存储"""
+        """Get or create vector store"""
         if force_recreate or not self._vector_store_exists(store_name):
-            logger.info("创建新的向量存储...")
+            logger.info("Creating new vector store...")
             self.create_vector_store()
             self.save_vector_store(store_name)
         else:
-            logger.info("加载现有向量存储...")
+            logger.info("Loading existing vector store...")
             self.load_vector_store(store_name)
         
         return self.vector_store
     
     def _vector_store_exists(self, store_name: str = "default") -> bool:
-        """检查向量存储是否存在"""
+        """Check if vector store exists"""
         store_path = self.vector_store_path / store_name
         return store_path.exists() and (store_path / "index.faiss").exists()
     
     def get_retriever(self, k: int = 4, search_type: str = "similarity"):
-        """获取检索器"""
+        """Get retriever"""
         if self.vector_store is None:
-            raise ValueError("向量存储未初始化，请先调用 get_or_create_vector_store()")
+            raise ValueError("Vector store not initialized, please call get_or_create_vector_store() first")
         
         return self.vector_store.as_retriever(
             search_type=search_type,
@@ -136,71 +136,71 @@ class VectorStoreManager:
         )
     
     def similarity_search(self, query: str, k: int = 4) -> List[Document]:
-        """相似性搜索"""
+        """Similarity search"""
         if self.vector_store is None:
-            raise ValueError("向量存储未初始化")
+            raise ValueError("Vector store not initialized")
         
         return self.vector_store.similarity_search(query, k=k)
     
     def add_documents(self, documents: List[Document]) -> None:
-        """向现有向量存储添加文档"""
+        """Add documents to existing vector store"""
         if self.vector_store is None:
-            raise ValueError("向量存储未初始化")
+            raise ValueError("Vector store not initialized")
         
         self.vector_store.add_documents(documents)
-        logger.info(f"已添加 {len(documents)} 个文档到向量存储")
+        logger.info(f"Added {len(documents)} documents to vector store")
     
     def delete_vector_store(self, store_name: str = "default") -> None:
-        """删除向量存储"""
+        """Delete vector store"""
         store_path = self.vector_store_path / store_name
         if store_path.exists():
             import shutil
             shutil.rmtree(store_path)
-            logger.info(f"已删除向量存储: {store_path}")
+            logger.info(f"Deleted vector store: {store_path}")
         
         if self.vector_store is not None:
             self.vector_store = None
     
     def delete_documents_by_ids(self, ids: List[str]) -> bool:
-        """按ID删除文档"""
+        """Delete documents by IDs"""
         if self.vector_store is None:
-            raise ValueError("向量存储未初始化")
+            raise ValueError("Vector store not initialized")
         
         try:
             result = self.vector_store.delete(ids)
-            logger.info(f"已删除 {len(ids)} 个文档")
+            logger.info(f"Deleted {len(ids)} documents")
             return result
         except Exception as e:
-            logger.error(f"删除文档失败: {str(e)}")
+            logger.error(f"Failed to delete documents: {str(e)}")
             raise
     
     def delete_documents_by_source(self, source_path: str) -> bool:
-        """按源文件路径删除相关文档"""
+        """Delete related documents by source file path"""
         if self.vector_store is None:
-            raise ValueError("向量存储未初始化")
+            raise ValueError("Vector store not initialized")
         
-        # 查找该源文件的所有文档ID
+        # Find all document IDs for this source file
         doc_ids = []
         for doc_id, doc in self.vector_store.docstore._dict.items():
             if hasattr(doc, 'metadata') and doc.metadata.get('source') == source_path:
                 doc_ids.append(doc_id)
         
         if not doc_ids:
-            logger.warning(f"未找到源文件 {source_path} 的相关文档")
+            logger.warning(f"No related documents found for source file {source_path}")
             return False
         
         try:
             result = self.vector_store.delete(doc_ids)
-            logger.info(f"已删除源文件 {source_path} 的 {len(doc_ids)} 个文档")
+            logger.info(f"Deleted {len(doc_ids)} documents for source file {source_path}")
             return result
         except Exception as e:
-            logger.error(f"删除源文件文档失败: {str(e)}")
+            logger.error(f"Failed to delete source file documents: {str(e)}")
             raise
     
     def get_document_ids_by_source(self, source_path: str) -> List[str]:
-        """获取指定源文件的所有文档ID"""
+        """Get all document IDs for specified source file"""
         if self.vector_store is None:
-            raise ValueError("向量存储未初始化")
+            raise ValueError("Vector store not initialized")
         
         doc_ids = []
         for doc_id, doc in self.vector_store.docstore._dict.items():
@@ -210,21 +210,21 @@ class VectorStoreManager:
         return doc_ids
     
     def rebuild_from_directory(self, force_rebuild: bool = True) -> FAISS:
-        """重新扫描目录并重建向量存储"""
-        logger.info("重新扫描文档目录...")
+        """Rescan directory and rebuild vector store"""
+        logger.info("Rescanning document directory...")
         documents = self.document_loader.load_documents_from_directory()
         
         if force_rebuild:
-            logger.info("强制重建向量存储...")
+            logger.info("Force rebuilding vector store...")
             self.create_vector_store(documents)
         else:
-            # 增量更新逻辑可以在这里实现
-            logger.info("增量更新向量存储...")
+            # Incremental update logic can be implemented here
+            logger.info("Incremental updating vector store...")
             if self.vector_store is None:
                 self.create_vector_store(documents)
             else:
-                # 这里需要实现增量更新的逻辑
-                # 比较现有文档和新文档，添加新的，删除不存在的
+                # Logic for incremental updates needs to be implemented here
+                # Compare existing documents with new documents, add new ones, remove non-existent ones
                 pass
         
         return self.vector_store 

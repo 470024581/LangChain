@@ -1,7 +1,7 @@
 """
-工作流模块
+Workflow Module
 
-基于LangGraph实现的多智能体协作工作流
+Multi-agent collaborative workflow implemented with LangGraph
 """
 
 from .multi_agent_workflow import MultiAgentWorkflow

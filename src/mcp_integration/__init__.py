@@ -1,5 +1,5 @@
 """
-MCP (Model Context Protocol) 客户端包
+MCP (Model Context Protocol) client package
 """
 
 from .mcp_client import mcp_manager

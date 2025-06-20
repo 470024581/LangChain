@@ -1,5 +1,5 @@
 """
-评估运行器模块
+Evaluation runner module
 """
 
 import logging
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class EvaluationResult:
-    """单个评估结果"""
+    """Single evaluation result"""
     example_id: str
     question: str
     prediction: str
@@ -36,7 +36,7 @@ class EvaluationResult:
 
 @dataclass
 class EvaluationReport:
-    """评估报告"""
+    """Evaluation report"""
     dataset_name: str
     evaluator_names: List[str]
     total_examples: int
@@ -47,19 +47,19 @@ class EvaluationReport:
     metadata: Dict[str, Any]
     
     def to_dict(self) -> Dict[str, Any]:
-        """转换为字典"""
+        """Convert to dictionary"""
         return asdict(self)
     
     def save_to_file(self, file_path: str):
-        """保存到文件"""
+        """Save to file"""
         Path(file_path).parent.mkdir(parents=True, exist_ok=True)
         with open(file_path, 'w', encoding='utf-8') as f:
             json.dump(self.to_dict(), f, ensure_ascii=False, indent=2)
-        logger.info(f"评估报告已保存到: {file_path}")
+        logger.info(f"Evaluation report saved to: {file_path}")
 
 
 class EvaluationRunner:
-    """评估运行器"""
+    """Evaluation runner"""
     
     def __init__(
         self,
@@ -76,25 +76,25 @@ class EvaluationRunner:
         use_conversational: bool = False,
         max_concurrency: int = 3
     ) -> EvaluationReport:
-        """运行评估"""
+        """Run evaluation"""
         
         start_time = datetime.now()
         
-        # 默认评估器
+        # Default evaluators
         if not evaluator_types:
             evaluator_types = ["accuracy", "relevance", "helpfulness", "groundedness"]
         
-        # 创建评估器
+        # Create evaluators
         evaluators = EvaluatorFactory.create_multiple_evaluators(evaluator_types)
         
-        # 选择使用的链
+        # Select chain to use
         chain = self.conversational_chain if use_conversational else self.qa_chain
         if not chain:
-            raise ValueError("未提供有效的问答链")
+            raise ValueError("No valid Q&A chain provided")
         
-        logger.info(f"开始评估数据集 '{dataset.name}'，包含 {len(dataset)} 个样例")
+        logger.info(f"Starting evaluation of dataset '{dataset.name}' with {len(dataset)} examples")
         
-        # 运行评估
+        # Run evaluation
         individual_results = []
         semaphore = asyncio.Semaphore(max_concurrency)
         
@@ -105,13 +105,13 @@ class EvaluationRunner:
         
         individual_results = await asyncio.gather(*tasks)
         
-        # 计算平均分数
+        # Calculate average scores
         avg_scores = self._calculate_average_scores(individual_results, evaluator_types)
         
         end_time = datetime.now()
         execution_time = (end_time - start_time).total_seconds()
         
-        # 创建评估报告
+        # Create evaluation report
         report = EvaluationReport(
             dataset_name=dataset.name,
             evaluator_names=evaluator_types,
@@ -126,7 +126,7 @@ class EvaluationRunner:
             }
         )
         
-        logger.info(f"评估完成，总耗时: {execution_time:.2f}秒")
+        logger.info(f"Evaluation completed, total time: {execution_time:.2f} seconds")
         self._log_results(report)
         
         return report
@@ -139,25 +139,25 @@ class EvaluationRunner:
         semaphore: asyncio.Semaphore,
         example_index: int
     ) -> EvaluationResult:
-        """评估单个样例"""
+        """Evaluate single example"""
         
         async with semaphore:
             start_time = datetime.now()
             
             try:
-                # 获取预测结果
+                # Get prediction results
                 if hasattr(chain, 'invoke'):
-                    # 标准问答链
+                    # Standard Q&A chain
                     result = chain.invoke(
                         question=example.question,
                         session_id=example.session_id or f"eval_{example_index}"
                     )
                     prediction = result.get("answer", "")
                 else:
-                    # 其他类型的链
+                    # Other types of chains
                     prediction = str(chain.invoke({"question": example.question}))
                 
-                # 运行所有评估器
+                # Run all evaluators
                 scores = {}
                 comments = {}
                 
@@ -185,16 +185,16 @@ class EvaluationRunner:
                 )
                 
             except Exception as e:
-                logger.error(f"评估样例 {example_index} 失败: {str(e)}")
+                logger.error(f"Failed to evaluate example {example_index}: {str(e)}")
                 execution_time = (datetime.now() - start_time).total_seconds()
                 
                 return EvaluationResult(
                     example_id=f"example_{example_index}",
                     question=example.question,
-                    prediction=f"错误: {str(e)}",
+                    prediction=f"Error: {str(e)}",
                     expected_answer=example.expected_answer,
                     scores={evaluator.name: 0.0 for evaluator in evaluators},
-                    comments={evaluator.name: f"评估失败: {str(e)}" for evaluator in evaluators},
+                    comments={evaluator.name: f"Evaluation failed: {str(e)}" for evaluator in evaluators},
                     execution_time=execution_time,
                     metadata=example.metadata or {}
                 )
@@ -204,7 +204,7 @@ class EvaluationRunner:
         results: List[EvaluationResult],
         evaluator_names: List[str]
     ) -> Dict[str, float]:
-        """计算平均分数"""
+        """Calculate average scores"""
         
         avg_scores = {}
         
@@ -212,20 +212,20 @@ class EvaluationRunner:
             scores = [result.scores.get(evaluator_name, 0.0) for result in results]
             avg_scores[evaluator_name] = sum(scores) / len(scores) if scores else 0.0
         
-        # 计算总体平均分
+        # Calculate overall average score
         all_scores = list(avg_scores.values())
         avg_scores["overall"] = sum(all_scores) / len(all_scores) if all_scores else 0.0
         
         return avg_scores
     
     def _log_results(self, report: EvaluationReport):
-        """记录评估结果"""
+        """Log evaluation results"""
         logger.info("=" * 50)
-        logger.info(f"评估报告 - {report.dataset_name}")
+        logger.info(f"Evaluation Report - {report.dataset_name}")
         logger.info("=" * 50)
-        logger.info(f"总样例数: {report.total_examples}")
-        logger.info(f"执行时间: {report.execution_time:.2f}秒")
-        logger.info("平均分数:")
+        logger.info(f"Total examples: {report.total_examples}")
+        logger.info(f"Execution time: {report.execution_time:.2f} seconds")
+        logger.info("Average scores:")
         
         for evaluator_name, score in report.avg_scores.items():
             logger.info(f"  {evaluator_name}: {score:.3f}")
@@ -239,25 +239,25 @@ class EvaluationRunner:
         evaluator_types: List[str] = None,
         use_conversational: bool = False
     ) -> Optional[str]:
-        """在 LangSmith 上运行评估"""
+        """Run evaluation on LangSmith"""
         
         if not langsmith_manager.is_enabled:
-            logger.warning("LangSmith 未启用，无法运行云端评估")
+            logger.warning("LangSmith not enabled, cannot run cloud evaluation")
             return None
         
         try:
-            # 选择使用的链
+            # Select chain to use
             chain = self.conversational_chain if use_conversational else self.qa_chain
             if not chain:
-                raise ValueError("未提供有效的问答链")
+                raise ValueError("No valid Q&A chain provided")
             
-            # 创建评估器
+            # Create evaluators
             if not evaluator_types:
                 evaluator_types = ["accuracy", "relevance", "helpfulness"]
             
             evaluators = EvaluatorFactory.create_multiple_evaluators(evaluator_types)
             
-            # 创建预测函数
+            # Create prediction function
             def predict(inputs: Dict[str, Any]) -> Dict[str, Any]:
                 question = inputs.get("question", "")
                 try:
@@ -268,9 +268,9 @@ class EvaluationRunner:
                         answer = str(chain.invoke({"question": question}))
                         return {"answer": answer}
                 except Exception as e:
-                    return {"answer": f"错误: {str(e)}"}
+                    return {"answer": f"Error: {str(e)}"}
             
-            # 运行评估
+            # Run evaluation
             experiment_name = experiment_name or f"eval_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             
             experiment = evaluate(
@@ -281,23 +281,23 @@ class EvaluationRunner:
                 client=langsmith_manager.client
             )
             
-            logger.info(f"LangSmith 评估已启动，实验名称: {experiment_name}")
+            logger.info(f"LangSmith evaluation started, experiment name: {experiment_name}")
             return experiment_name
             
         except Exception as e:
-            logger.error(f"LangSmith 评估失败: {str(e)}")
+            logger.error(f"LangSmith evaluation failed: {str(e)}")
             return None
 
 
 class EvaluationManager:
-    """评估管理器"""
+    """Evaluation manager"""
     
     def __init__(self, reports_dir: str = "./evaluation_reports"):
         self.reports_dir = Path(reports_dir)
         self.reports_dir.mkdir(exist_ok=True)
         
     def save_report(self, report: EvaluationReport) -> str:
-        """保存评估报告"""
+        """Save evaluation report"""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{report.dataset_name}_{timestamp}.json"
         file_path = self.reports_dir / filename
@@ -306,12 +306,12 @@ class EvaluationManager:
         return str(file_path)
     
     def load_report(self, file_path: str) -> Optional[EvaluationReport]:
-        """加载评估报告"""
+        """Load evaluation report"""
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
-            # 重构 EvaluationResult 对象
+            # Reconstruct EvaluationResult objects
             individual_results = []
             for result_data in data.get("individual_results", []):
                 result = EvaluationResult(**result_data)
@@ -322,16 +322,16 @@ class EvaluationManager:
             return EvaluationReport(**data)
             
         except Exception as e:
-            logger.error(f"加载评估报告失败: {str(e)}")
+            logger.error(f"Failed to load evaluation report: {str(e)}")
             return None
     
     def list_reports(self) -> List[str]:
-        """列出所有评估报告"""
+        """List all evaluation reports"""
         report_files = list(self.reports_dir.glob("*.json"))
         return [str(f) for f in report_files]
     
     def generate_summary_report(self, reports: List[EvaluationReport]) -> Dict[str, Any]:
-        """生成汇总报告"""
+        """Generate summary report"""
         if not reports:
             return {}
         
@@ -344,7 +344,7 @@ class EvaluationManager:
             "worst_performing_dataset": None
         }
         
-        # 计算各评估器的平均分数
+        # Calculate average scores for each evaluator
         all_evaluator_names = set()
         for report in reports:
             all_evaluator_names.update(report.avg_scores.keys())
@@ -361,7 +361,7 @@ class EvaluationManager:
                 "max": max(scores) if scores else 0.0
             }
         
-        # 找出表现最好和最差的数据集
+        # Find best and worst performing datasets
         if "overall" in summary["avg_scores_by_evaluator"]:
             best_score = 0.0
             worst_score = 1.0

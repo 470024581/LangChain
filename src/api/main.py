@@ -16,14 +16,14 @@ from ..memory.conversation_memory import SessionManager
 from ..config.settings import settings
 from ..utils.langsmith_utils import langsmith_manager, get_langsmith_config
 
-# 配置日志
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# 全局变量
+# Global variables
 vector_store_manager: Optional[VectorStoreManager] = None
 qa_chain: Optional[DocumentQAChain] = None
 conversational_chain: Optional[ConversationalRetrievalChain] = None
@@ -34,47 +34,47 @@ session_manager: SessionManager = SessionManager()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用生命周期管理"""
+    """Application lifecycle management"""
     global vector_store_manager, qa_chain, conversational_chain, sql_agent, multi_agent_workflow
     
-    logger.info("初始化应用...")
+    logger.info("Initializing application...")
     
     try:
-        # 初始化向量存储管理器
+        # Initialize vector store manager
         vector_store_manager = VectorStoreManager(use_openai_embeddings=False)
         vector_store_manager.get_or_create_vector_store()
         
-        # 初始化问答链
+        # Initialize Q&A chain
         qa_chain = DocumentQAChain(
             vector_store_manager=vector_store_manager,
             use_memory=True
         )
         
-        # 初始化对话式检索链
+        # Initialize conversational retrieval chain
         conversational_chain = ConversationalRetrievalChain(
             vector_store_manager=vector_store_manager
         )
         
-        # 初始化SQL Agent
+        # Initialize SQL Agent
         try:
             sql_agent = SQLAgent(use_memory=True, verbose=False)
-            logger.info("SQL Agent初始化完成")
+            logger.info("SQL Agent initialization completed")
         except Exception as e:
-            logger.warning(f"SQL Agent初始化失败: {str(e)}")
+            logger.warning(f"SQL Agent initialization failed: {str(e)}")
             sql_agent = None
         
-        # 初始化多智能体工作流
+        # Initialize multi-agent workflow
         try:
             multi_agent_workflow = MultiAgentWorkflow(
                 vector_store_manager=vector_store_manager,
                 max_iterations=2
             )
-            logger.info("多智能体工作流初始化完成")
+            logger.info("Multi-agent workflow initialization completed")
         except Exception as e:
-            logger.warning(f"多智能体工作流初始化失败: {str(e)}")
+            logger.warning(f"Multi-agent workflow initialization failed: {str(e)}")
             multi_agent_workflow = None
         
-        # 添加LangServe路由
+        # Add LangServe routes
         add_routes(
             app,
             qa_chain.chain,
@@ -89,29 +89,29 @@ async def lifespan(app: FastAPI):
             enabled_endpoints=["invoke", "stream", "stream_log", "playground", "input_schema", "output_schema", "config_schema"]
         )
         
-        logger.info("应用初始化完成")
-        logger.info("LangServe路由已添加:")
-        logger.info("  - /langserve/qa (标准问答链)")
-        logger.info("  - /langserve/conversational (对话式检索链)")
+        logger.info("Application initialization completed")
+        logger.info("LangServe routes added:")
+        logger.info("  - /langserve/qa (Standard Q&A chain)")
+        logger.info("  - /langserve/conversational (Conversational retrieval chain)")
         
     except Exception as e:
-        logger.error(f"应用初始化失败: {str(e)}")
+        logger.error(f"Application initialization failed: {str(e)}")
         raise
     
     yield
     
-    logger.info("应用关闭")
+    logger.info("Application shutdown")
 
 
-# 创建FastAPI应用
+# Create FastAPI application
 app = FastAPI(
-    title="文档问答系统",
-    description="基于LangChain构建的文档问答API系统",
+    title="Document Q&A System",
+    description="Document Q&A API system built with LangChain",
     version="1.0.0",
     lifespan=lifespan
 )
 
-# 添加CORS中间件
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -121,25 +121,25 @@ app.add_middleware(
 )
 
 
-# Pydantic模型
+# Pydantic models
 class QuestionRequest(BaseModel):
-    """问题请求模型"""
-    question: str = Field(..., description="用户问题")
-    session_id: str = Field("default", description="会话ID")
-    use_conversational: bool = Field(False, description="是否使用对话式检索")
+    """Question request model"""
+    question: str = Field(..., description="User question")
+    session_id: str = Field("default", description="Session ID")
+    use_conversational: bool = Field(False, description="Whether to use conversational retrieval")
 
 
 class QuestionResponse(BaseModel):
-    """问题响应模型"""
-    answer: str = Field(..., description="答案")
-    question: str = Field(..., description="原始问题")
-    session_id: str = Field(..., description="会话ID")
-    relevant_documents: list = Field(default_factory=list, description="相关文档")
-    standalone_question: Optional[str] = Field(None, description="独立问题（仅对话式检索）")
+    """Question response model"""
+    answer: str = Field(..., description="Answer")
+    question: str = Field(..., description="Original question")
+    session_id: str = Field(..., description="Session ID")
+    relevant_documents: list = Field(default_factory=list, description="Relevant documents")
+    standalone_question: Optional[str] = Field(None, description="Standalone question (conversational retrieval only)")
 
 
 class MemoryStatsResponse(BaseModel):
-    """记忆统计响应模型"""
+    """Memory statistics response model"""
     session_id: str
     total_messages: int
     user_messages: int
@@ -149,90 +149,90 @@ class MemoryStatsResponse(BaseModel):
 
 
 class SQLQueryRequest(BaseModel):
-    """SQL查询请求模型"""
-    question: str = Field(..., description="自然语言问题")
-    session_id: str = Field("default", description="会话ID")
+    """SQL query request model"""
+    question: str = Field(..., description="Natural language question")
+    session_id: str = Field("default", description="Session ID")
 
 
 class SQLQueryResponse(BaseModel):
-    """SQL查询响应模型"""
-    answer: str = Field(..., description="查询结果")
-    question: str = Field(..., description="原始问题")
-    session_id: str = Field(..., description="会话ID")
-    success: bool = Field(..., description="查询是否成功")
-    intermediate_steps: list = Field(default_factory=list, description="中间步骤")
-    error: Optional[str] = Field(None, description="错误信息")
+    """SQL query response model"""
+    answer: str = Field(..., description="Query result")
+    question: str = Field(..., description="Original question")
+    session_id: str = Field(..., description="Session ID")
+    success: bool = Field(..., description="Whether query was successful")
+    intermediate_steps: list = Field(default_factory=list, description="Intermediate steps")
+    error: Optional[str] = Field(None, description="Error message")
 
 
 class WorkflowRequest(BaseModel):
-    """工作流请求模型"""
-    question: str = Field(..., description="用户问题")
-    session_id: str = Field(default="default", description="会话ID")
+    """Workflow request model"""
+    question: str = Field(..., description="User question")
+    session_id: str = Field(default="default", description="Session ID")
 
 
 class WorkflowResponse(BaseModel):
-    """工作流响应模型"""
-    question: str = Field(..., description="原始问题")
-    answer: str = Field(..., description="生成的答案")
-    query_type: str = Field(..., description="查询类型(sql/rag)")
-    router_reasoning: str = Field(..., description="路由决策理由")
-    review_score: float = Field(..., description="审阅得分")
-    review_feedback: str = Field(..., description="审阅反馈")
-    review_approved: bool = Field(..., description="审阅是否通过")
-    iteration_count: int = Field(..., description="迭代次数")
-    retrieved_documents: Optional[List[Dict[str, Any]]] = Field(None, description="检索到的文档")
-    session_id: str = Field(..., description="会话ID")
-    success: bool = Field(..., description="执行是否成功")
-    error: Optional[str] = Field(None, description="错误信息")
+    """Workflow response model"""
+    question: str = Field(..., description="Original question")
+    answer: str = Field(..., description="Generated answer")
+    query_type: str = Field(..., description="Query type (sql/rag)")
+    router_reasoning: str = Field(..., description="Routing decision reasoning")
+    review_score: float = Field(..., description="Review score")
+    review_feedback: str = Field(..., description="Review feedback")
+    review_approved: bool = Field(..., description="Whether review was approved")
+    iteration_count: int = Field(..., description="Iteration count")
+    retrieved_documents: Optional[List[Dict[str, Any]]] = Field(None, description="Retrieved documents")
+    session_id: str = Field(..., description="Session ID")
+    success: bool = Field(..., description="Whether execution was successful")
+    error: Optional[str] = Field(None, description="Error message")
 
 
 def get_qa_chain() -> DocumentQAChain:
-    """获取问答链实例"""
+    """Get Q&A chain instance"""
     if qa_chain is None:
-        raise HTTPException(status_code=500, detail="问答链未初始化")
+        raise HTTPException(status_code=500, detail="Q&A chain not initialized")
     return qa_chain
 
 
 def get_conversational_chain() -> ConversationalRetrievalChain:
-    """获取对话式检索链实例"""
+    """Get conversational retrieval chain instance"""
     if conversational_chain is None:
-        raise HTTPException(status_code=500, detail="对话式检索链未初始化")
+        raise HTTPException(status_code=500, detail="Conversational retrieval chain not initialized")
     return conversational_chain
 
 
 def get_vector_store_manager() -> VectorStoreManager:
-    """获取向量存储管理器实例"""
+    """Get vector store manager instance"""
     if vector_store_manager is None:
-        raise HTTPException(status_code=500, detail="向量存储管理器未初始化")
+        raise HTTPException(status_code=500, detail="Vector store manager not initialized")
     return vector_store_manager
 
 
 def get_sql_agent() -> SQLAgent:
-    """获取SQL Agent实例"""
+    """Get SQL Agent instance"""
     if sql_agent is None:
-        raise HTTPException(status_code=500, detail="SQL Agent未初始化")
+        raise HTTPException(status_code=500, detail="SQL Agent not initialized")
     return sql_agent
 
 
 def get_multi_agent_workflow() -> MultiAgentWorkflow:
-    """获取多智能体工作流实例"""
+    """Get multi-agent workflow instance"""
     if multi_agent_workflow is None:
-        raise HTTPException(status_code=500, detail="多智能体工作流未初始化")
+        raise HTTPException(status_code=500, detail="Multi-agent workflow not initialized")
     return multi_agent_workflow
 
 
-# API路由
+# API Routes
 @app.get("/")
 async def root():
-    """根路径"""
-    return {"message": "文档问答系统API", "version": "1.0.0"}
+    """Root path"""
+    return {"message": "Document Q&A System API", "version": "1.0.0"}
 
 
 @app.get("/health")
 async def health_check():
-    """健康检查"""
+    """Health check"""
     try:
-        # 检查各组件状态
+        # Check component status
         qa_status = qa_chain is not None
         vector_status = vector_store_manager is not None and vector_store_manager.vector_store is not None
         sql_status = sql_agent is not None
@@ -253,7 +253,7 @@ async def health_check():
 
 @app.get("/langsmith/config")
 async def get_langsmith_config_endpoint():
-    """获取 LangSmith 配置信息"""
+    """Get LangSmith configuration information"""
     try:
         config = get_langsmith_config()
         return {
@@ -274,10 +274,10 @@ async def submit_langsmith_feedback(
     score: float,
     comment: Optional[str] = None
 ):
-    """提交 LangSmith 反馈"""
+    """Submit LangSmith feedback"""
     try:
         if not langsmith_manager.is_enabled:
-            raise HTTPException(status_code=400, detail="LangSmith 未启用")
+            raise HTTPException(status_code=400, detail="LangSmith not enabled")
         
         langsmith_manager.log_feedback(
             run_id=run_id,
@@ -288,12 +288,12 @@ async def submit_langsmith_feedback(
         
         return {
             "status": "success",
-            "message": "反馈已提交"
+            "message": "Feedback submitted"
         }
         
     except Exception as e:
-        logger.error(f"提交 LangSmith 反馈失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"提交反馈失败: {str(e)}")
+        logger.error(f"Failed to submit LangSmith feedback: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to submit feedback: {str(e)}")
 
 
 @app.post("/ask", response_model=QuestionResponse)
@@ -302,18 +302,18 @@ async def ask_question(
     qa_chain: DocumentQAChain = Depends(get_qa_chain),
     conv_chain: ConversationalRetrievalChain = Depends(get_conversational_chain)
 ):
-    """处理问答请求"""
+    """Handle Q&A request"""
     try:
-        logger.info(f"收到问题: {request.question[:100]}...")
+        logger.info(f"Received question: {request.question[:100]}...")
         
         if request.use_conversational:
-            # 使用对话式检索链
+            # Use conversational retrieval chain
             result = conv_chain.invoke(
                 question=request.question,
                 session_id=request.session_id
             )
         else:
-            # 使用标准问答链
+            # Use standard Q&A chain
             result = qa_chain.invoke(
                 question=request.question,
                 session_id=request.session_id
@@ -322,8 +322,8 @@ async def ask_question(
         return QuestionResponse(**result)
         
     except Exception as e:
-        logger.error(f"处理问题失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"处理问题失败: {str(e)}")
+        logger.error(f"Failed to process question: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process question: {str(e)}")
 
 
 @app.get("/documents/{question}", response_model=List[Dict])
@@ -332,14 +332,14 @@ async def get_relevant_documents(
     k: int = 4, 
     vector_manager: VectorStoreManager = Depends(get_vector_store_manager)
 ):
-    """根据问题获取相关文档"""
+    """Get relevant documents based on question"""
     try:
         retriever = vector_manager.get_retriever(k=k)
         documents = await retriever.ainvoke(question)
         return [doc.dict() for doc in documents]
     except Exception as e:
-        logger.error(f"获取相关文档失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取相关文档失败: {str(e)}")
+        logger.error(f"Failed to get relevant documents: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get relevant documents: {str(e)}")
 
 
 @app.get("/memory/{session_id}/stats", response_model=MemoryStatsResponse)
@@ -347,17 +347,17 @@ async def get_memory_stats(
     session_id: str,
     qa_chain: DocumentQAChain = Depends(get_qa_chain)
 ):
-    """获取记忆统计信息"""
+    """Get memory statistics"""
     try:
         stats = qa_chain.get_memory_stats(session_id)
         if not stats:
-            raise HTTPException(status_code=404, detail="会话不存在")
+            raise HTTPException(status_code=404, detail="Session does not exist")
         
         return MemoryStatsResponse(**stats)
         
     except Exception as e:
-        logger.error(f"获取记忆统计失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取记忆统计失败: {str(e)}")
+        logger.error(f"Failed to get memory statistics: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get memory statistics: {str(e)}")
 
 
 @app.delete("/memory/{session_id}")
@@ -365,26 +365,26 @@ async def clear_memory(
     session_id: str,
     qa_chain: DocumentQAChain = Depends(get_qa_chain)
 ):
-    """清空指定会话的记忆"""
+    """Clear memory for specified session"""
     try:
         qa_chain.clear_memory(session_id)
-        return {"message": f"会话 {session_id} 的记忆已清空"}
+        return {"message": f"Memory for session {session_id} has been cleared"}
         
     except Exception as e:
-        logger.error(f"清空记忆失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"清空记忆失败: {str(e)}")
+        logger.error(f"Failed to clear memory: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear memory: {str(e)}")
 
 
 @app.get("/memory/sessions")
 async def get_sessions():
-    """获取所有会话列表"""
+    """Get all session list"""
     try:
         sessions = session_manager.get_all_sessions()
         return {"sessions": sessions}
         
     except Exception as e:
-        logger.error(f"获取会话列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取会话列表失败: {str(e)}")
+        logger.error(f"Failed to get session list: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get session list: {str(e)}")
 
 
 @app.post("/vector_store/rebuild")
@@ -392,22 +392,22 @@ async def rebuild_vector_store(
     force: bool = False,
     vector_manager: VectorStoreManager = Depends(get_vector_store_manager)
 ):
-    """重建向量存储"""
+    """Rebuild vector store"""
     try:
-        logger.info("开始重建向量存储...")
-        vector_manager.get_or_create_vector_store(force_recreate=force)
-        logger.info("向量存储重建完成")
+        logger.info("Starting vector store rebuild...")
+        await vector_manager.rebuild_vector_store(force=force)
+        logger.info("Vector store rebuild completed")
         
-        return {"message": "向量存储重建成功"}
+        return {"message": "Vector store rebuild successful"}
         
     except Exception as e:
-        logger.error(f"重建向量存储失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"重建向量存储失败: {str(e)}")
+        logger.error(f"Failed to rebuild vector store: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to rebuild vector store: {str(e)}")
 
 
 @app.get("/debug/config")
 async def debug_config():
-    """调试配置信息（仅用于开发调试）"""
+    """Debug configuration information (for development debugging only)"""
     try:
         import os
         from ..config.settings import settings
@@ -431,7 +431,7 @@ async def debug_config():
 
 
 # ===============================
-# 评估相关端点
+# Evaluation Related Endpoints
 # ===============================
 
 @app.post("/evaluation/datasets/create")
@@ -440,7 +440,7 @@ async def create_evaluation_dataset(
     description: str = "",
     examples: List[Dict[str, Any]] = []
 ):
-    """创建评估数据集"""
+    """Create evaluation dataset"""
     try:
         from ..evaluation.datasets import EvaluationDataset, DatasetManager
         
@@ -451,13 +451,13 @@ async def create_evaluation_dataset(
         dataset_manager = DatasetManager()
         file_path = dataset_manager.save_dataset(dataset)
         
-        # 如果 LangSmith 启用，也上传到云端
+        # If LangSmith is enabled, also upload to cloud
         dataset_id = None
         if langsmith_manager.is_enabled:
             dataset_id = dataset.upload_to_langsmith()
         
         return {
-            "message": "数据集创建成功",
+            "message": "Dataset created successfully",
             "dataset_name": name,
             "examples_count": len(dataset),
             "file_path": file_path,
@@ -465,13 +465,13 @@ async def create_evaluation_dataset(
         }
         
     except Exception as e:
-        logger.error(f"创建评估数据集失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"创建数据集失败: {str(e)}")
+        logger.error(f"Failed to create evaluation dataset: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create dataset: {str(e)}")
 
 
 @app.post("/evaluation/datasets/create-default")
 async def create_default_evaluation_datasets():
-    """创建默认评估数据集"""
+    """Create default evaluation datasets"""
     try:
         from ..evaluation.datasets import DatasetManager
         
@@ -481,18 +481,18 @@ async def create_default_evaluation_datasets():
         datasets = dataset_manager.list_datasets()
         
         return {
-            "message": "默认数据集创建成功",
+            "message": "Default datasets created successfully",
             "datasets": datasets
         }
         
     except Exception as e:
-        logger.error(f"创建默认数据集失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"创建默认数据集失败: {str(e)}")
+        logger.error(f"Failed to create default dataset: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create default dataset: {str(e)}")
 
 
 @app.get("/evaluation/datasets")
 async def list_evaluation_datasets():
-    """列出所有评估数据集"""
+    """List all evaluation datasets"""
     try:
         from ..evaluation.datasets import DatasetManager
         
@@ -502,11 +502,11 @@ async def list_evaluation_datasets():
         return {"datasets": datasets}
         
     except Exception as e:
-        logger.error(f"获取数据集列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取数据集列表失败: {str(e)}")
+        logger.error(f"Failed to get dataset list: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get dataset list: {str(e)}")
 
 
-@app.post("/evaluation/run")
+@app.post("/evaluation/run", response_model=WorkflowResponse)
 async def run_evaluation(
     dataset_name: str,
     evaluator_types: List[str] = ["accuracy", "relevance", "helpfulness", "groundedness"],
@@ -515,22 +515,22 @@ async def run_evaluation(
     qa_chain: DocumentQAChain = Depends(get_qa_chain),
     conv_chain: ConversationalRetrievalChain = Depends(get_conversational_chain)
 ):
-    """运行模型评估"""
+    """Run model evaluation"""
     try:
         from ..evaluation.datasets import DatasetManager
         from ..evaluation.runners import EvaluationRunner, EvaluationManager
         
-        # 加载数据集
+        # Load dataset
         dataset_manager = DatasetManager()
         dataset = dataset_manager.load_dataset(dataset_name)
         if not dataset:
-            raise HTTPException(status_code=404, detail=f"数据集 '{dataset_name}' 不存在")
+            raise HTTPException(status_code=404, detail=f"Dataset '{dataset_name}' does not exist")
         
-        # 创建评估运行器
+        # Create evaluation runner
         runner = EvaluationRunner(qa_chain=qa_chain, conversational_chain=conv_chain)
         
-        # 运行评估
-        logger.info(f"开始运行评估: {dataset_name}")
+        # Run evaluation
+        logger.info(f"Starting evaluation run: {dataset_name}")
         report = await runner.run_evaluation(
             dataset=dataset,
             evaluator_types=evaluator_types,
@@ -538,12 +538,12 @@ async def run_evaluation(
             max_concurrency=max_concurrency
         )
         
-        # 保存报告
+        # Save report
         eval_manager = EvaluationManager()
         report_file = eval_manager.save_report(report)
         
         return {
-            "message": "评估完成",
+            "message": "Evaluation completed",
             "dataset_name": dataset_name,
             "total_examples": report.total_examples,
             "avg_scores": report.avg_scores,
@@ -552,8 +552,8 @@ async def run_evaluation(
         }
         
     except Exception as e:
-        logger.error(f"运行评估失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"评估失败: {str(e)}")
+        logger.error(f"Failed to run evaluation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Evaluation failed: {str(e)}")
 
 
 @app.post("/evaluation/run-langsmith")
@@ -565,17 +565,17 @@ async def run_langsmith_evaluation(
     qa_chain: DocumentQAChain = Depends(get_qa_chain),
     conv_chain: ConversationalRetrievalChain = Depends(get_conversational_chain)
 ):
-    """在 LangSmith 上运行评估"""
+    """Run evaluation on LangSmith"""
     try:
         if not langsmith_manager.is_enabled:
-            raise HTTPException(status_code=400, detail="LangSmith 未启用")
+            raise HTTPException(status_code=400, detail="LangSmith not enabled")
         
         from ..evaluation.runners import EvaluationRunner
         
-        # 创建评估运行器
+        # Create evaluation runner
         runner = EvaluationRunner(qa_chain=qa_chain, conversational_chain=conv_chain)
         
-        # 在 LangSmith 上运行评估
+        # Run evaluation on LangSmith
         experiment_name = runner.run_langsmith_evaluation(
             dataset_name=dataset_name,
             experiment_name=experiment_name,
@@ -584,23 +584,23 @@ async def run_langsmith_evaluation(
         )
         
         if not experiment_name:
-            raise HTTPException(status_code=500, detail="LangSmith 评估启动失败")
+            raise HTTPException(status_code=500, detail="LangSmith evaluation startup failed")
         
         return {
-            "message": "LangSmith 评估已启动",
+            "message": "LangSmith evaluation started",
             "experiment_name": experiment_name,
             "dataset_name": dataset_name,
             "evaluator_types": evaluator_types
         }
         
     except Exception as e:
-        logger.error(f"LangSmith 评估失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"LangSmith 评估失败: {str(e)}")
+        logger.error(f"LangSmith evaluation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"LangSmith evaluation failed: {str(e)}")
 
 
 @app.get("/evaluation/reports")
 async def list_evaluation_reports():
-    """列出所有评估报告"""
+    """List all evaluation reports"""
     try:
         from ..evaluation.runners import EvaluationManager
         
@@ -610,13 +610,13 @@ async def list_evaluation_reports():
         return {"reports": reports}
         
     except Exception as e:
-        logger.error(f"获取评估报告列表失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取报告列表失败: {str(e)}")
+        logger.error(f"Failed to get evaluation report list: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get report list: {str(e)}")
 
 
 @app.get("/evaluation/reports/{report_file:path}")
 async def get_evaluation_report(report_file: str):
-    """获取评估报告详情"""
+    """Get evaluation report details"""
     try:
         from ..evaluation.runners import EvaluationManager
         
@@ -624,18 +624,18 @@ async def get_evaluation_report(report_file: str):
         report = eval_manager.load_report(report_file)
         
         if not report:
-            raise HTTPException(status_code=404, detail="报告文件不存在")
+            raise HTTPException(status_code=404, detail="Report file does not exist")
         
         return report.to_dict()
         
     except Exception as e:
-        logger.error(f"获取评估报告失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取报告失败: {str(e)}")
+        logger.error(f"Failed to get evaluation report: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get report: {str(e)}")
 
 
 @app.get("/evaluation/summary")
 async def get_evaluation_summary():
-    """获取评估汇总报告"""
+    """Get evaluation summary report"""
     try:
         from ..evaluation.runners import EvaluationManager
         
@@ -656,12 +656,12 @@ async def get_evaluation_summary():
         }
         
     except Exception as e:
-        logger.error(f"获取评估汇总失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取汇总失败: {str(e)}")
+        logger.error(f"Failed to get evaluation summary: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get summary: {str(e)}")
 
 
 # ===============================
-# SQL Agent相关端点
+# SQL Agent Related Endpoints
 # ===============================
 
 @app.post("/sql/query", response_model=SQLQueryResponse)
@@ -669,9 +669,9 @@ async def sql_query(
     request: SQLQueryRequest,
     agent: SQLAgent = Depends(get_sql_agent)
 ):
-    """执行SQL查询"""
+    """Execute SQL query"""
     try:
-        logger.info(f"收到SQL查询请求: {request.question[:100]}...")
+        logger.info(f"Received SQL query request: {request.question[:100]}...")
         
         result = agent.query(
             question=request.question,
@@ -681,15 +681,15 @@ async def sql_query(
         return SQLQueryResponse(**result)
         
     except Exception as e:
-        logger.error(f"SQL查询失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"SQL查询失败: {str(e)}")
+        logger.error(f"SQL query failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"SQL query failed: {str(e)}")
 
 
 @app.get("/sql/database/info")
 async def get_database_info(
     agent: SQLAgent = Depends(get_sql_agent)
 ):
-    """获取数据库信息"""
+    """Get database information"""
     try:
         info = agent.get_database_info()
         return {
@@ -698,8 +698,8 @@ async def get_database_info(
         }
         
     except Exception as e:
-        logger.error(f"获取数据库信息失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取数据库信息失败: {str(e)}")
+        logger.error(f"Failed to get database information: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get database information: {str(e)}")
 
 
 @app.get("/sql/tables/{table_name}/sample")
@@ -708,7 +708,7 @@ async def get_table_sample(
     limit: int = 5,
     agent: SQLAgent = Depends(get_sql_agent)
 ):
-    """获取表的样例数据"""
+    """Get sample data from table"""
     try:
         sample = agent.get_sample_data(table_name, limit)
         return {
@@ -717,8 +717,8 @@ async def get_table_sample(
         }
         
     except Exception as e:
-        logger.error(f"获取表样例数据失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取表样例数据失败: {str(e)}")
+        logger.error(f"Failed to get table sample data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get table sample data: {str(e)}")
 
 
 @app.delete("/sql/memory/{session_id}")
@@ -726,17 +726,17 @@ async def clear_sql_memory(
     session_id: str,
     agent: SQLAgent = Depends(get_sql_agent)
 ):
-    """清除SQL会话记忆"""
+    """Clear SQL session memory"""
     try:
         success = agent.clear_memory(session_id)
         return {
             "status": "success" if success else "failed",
-            "message": f"会话 {session_id} 记忆已清除" if success else f"清除会话 {session_id} 记忆失败"
+            "message": f"Session {session_id} memory cleared" if success else f"Failed to clear session {session_id} memory"
         }
         
     except Exception as e:
-        logger.error(f"清除SQL记忆失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"清除记忆失败: {str(e)}")
+        logger.error(f"Failed to clear SQL memory: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear memory: {str(e)}")
 
 
 @app.get("/sql/memory/{session_id}/stats")
@@ -744,7 +744,7 @@ async def get_sql_memory_stats(
     session_id: str,
     agent: SQLAgent = Depends(get_sql_agent)
 ):
-    """获取SQL会话记忆统计"""
+    """Get SQL session memory statistics"""
     try:
         stats = agent.get_memory_stats(session_id)
         return {
@@ -753,12 +753,12 @@ async def get_sql_memory_stats(
         }
         
     except Exception as e:
-        logger.error(f"获取SQL记忆统计失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取记忆统计失败: {str(e)}")
+        logger.error(f"Failed to get SQL memory statistics: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get memory statistics: {str(e)}")
 
 
 # ===============================
-# 多智能体工作流相关端点
+# Multi-Agent Workflow Related Endpoints
 # ===============================
 
 @app.post("/workflow/run", response_model=WorkflowResponse)
@@ -766,9 +766,9 @@ async def run_workflow(
     request: WorkflowRequest,
     workflow: MultiAgentWorkflow = Depends(get_multi_agent_workflow)
 ):
-    """运行多智能体工作流"""
+    """Run multi-agent workflow"""
     try:
-        logger.info(f"收到工作流请求: {request.question[:100]}...")
+        logger.info(f"Received workflow request: {request.question[:100]}...")
         
         result = workflow.run(
             question=request.question,
@@ -778,15 +778,15 @@ async def run_workflow(
         return WorkflowResponse(**result)
         
     except Exception as e:
-        logger.error(f"工作流执行失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"工作流执行失败: {str(e)}")
+        logger.error(f"Workflow execution failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Workflow execution failed: {str(e)}")
 
 
 @app.get("/workflow/info")
 async def get_workflow_info(
     workflow: MultiAgentWorkflow = Depends(get_multi_agent_workflow)
 ):
-    """获取工作流信息"""
+    """Get workflow information"""
     try:
         info = workflow.get_workflow_info()
         return {
@@ -795,8 +795,8 @@ async def get_workflow_info(
         }
         
     except Exception as e:
-        logger.error(f"获取工作流信息失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"获取工作流信息失败: {str(e)}")
+        logger.error(f"Failed to get workflow information: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get workflow information: {str(e)}")
 
 
 @app.delete("/workflow/memory/{session_id}")
@@ -804,19 +804,19 @@ async def clear_workflow_memory(
     session_id: str,
     workflow: MultiAgentWorkflow = Depends(get_multi_agent_workflow)
 ):
-    """清空工作流记忆"""
+    """Clear workflow memory"""
     try:
-        # 清空RAG和SQL智能体的记忆
+        # Clear memory of RAG and SQL agents
         if workflow.rag_agent:
             workflow.rag_agent.clear_memory(session_id)
         if workflow.sql_agent:
             workflow.sql_agent.clear_memory(session_id)
         
-        return {"message": f"工作流会话 {session_id} 的记忆已清空"}
+        return {"message": f"Workflow session {session_id} memory has been cleared"}
         
     except Exception as e:
-        logger.error(f"清空工作流记忆失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"清空工作流记忆失败: {str(e)}")
+        logger.error(f"Failed to clear workflow memory: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear workflow memory: {str(e)}")
 
 
 if __name__ == "__main__":

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import time
 import logging
@@ -14,189 +16,189 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentFileHandler(FileSystemEventHandler):
-    """文档文件变化处理器"""
+    """Document file change handler"""
     
-    # 支持的文档格式
+    # Supported document formats
     SUPPORTED_EXTENSIONS = {
         '.pdf', '.docx', '.doc', '.txt', '.md', '.csv', '.xlsx', '.xls'
     }
     
-    def __init__(self, on_file_added: Callable[[str], None] = None,
-                 on_file_removed: Callable[[str], None] = None,
-                 on_file_modified: Callable[[str], None] = None):
+    def __init__(self, on_file_added: Optional[Callable[[str], None]] = None,
+                 on_file_removed: Optional[Callable[[str], None]] = None,
+                 on_file_modified: Optional[Callable[[str], None]] = None):
         """
-        初始化文档文件处理器
+        Initialize document file handler
         
         Args:
-            on_file_added: 文件添加时的回调函数
-            on_file_removed: 文件删除时的回调函数
-            on_file_modified: 文件修改时的回调函数
+            on_file_added: Callback function when file is added
+            on_file_removed: Callback function when file is removed
+            on_file_modified: Callback function when file is modified
         """
         super().__init__()
         self.on_file_added = on_file_added
         self.on_file_removed = on_file_removed
         self.on_file_modified = on_file_modified
         
-        # 防止重复处理的缓存
+        # Cache to prevent duplicate processing
         self._processing_files: Set[str] = set()
         
     def _is_supported_file(self, file_path: str) -> bool:
-        """检查文件是否为支持的文档格式"""
+        """Check if file is a supported document format"""
         return Path(file_path).suffix.lower() in self.SUPPORTED_EXTENSIONS
     
     def _should_process_file(self, file_path: str) -> bool:
-        """检查是否应该处理该文件"""
+        """Check if file should be processed"""
         if not self._is_supported_file(file_path):
             return False
             
-        # 避免处理临时文件
+        # Avoid processing temporary files
         filename = Path(file_path).name
         if filename.startswith('.') or filename.startswith('~'):
             return False
             
-        # 避免重复处理
+        # Avoid duplicate processing
         if file_path in self._processing_files:
             return False
             
         return True
     
     def on_created(self, event: FileSystemEvent):
-        """处理文件创建事件"""
+        """Handle file creation event"""
         if event.is_directory:
             return
             
         file_path = event.src_path
         if self._should_process_file(file_path):
-            logger.info(f"检测到新文件: {file_path}")
+            logger.info(f"Detected new file: {file_path}")
             self._processing_files.add(file_path)
             
             try:
                 if self.on_file_added:
-                    # 等待文件写入完成
+                    # Wait for file write completion
                     time.sleep(1)
                     self.on_file_added(file_path)
             except Exception as e:
-                logger.error(f"处理新文件失败 {file_path}: {str(e)}")
+                logger.error(f"Failed to process new file {file_path}: {str(e)}")
             finally:
                 self._processing_files.discard(file_path)
     
     def on_deleted(self, event: FileSystemEvent):
-        """处理文件删除事件"""
+        """Handle file deletion event"""
         if event.is_directory:
             return
             
         file_path = event.src_path
         if self._is_supported_file(file_path):
-            logger.info(f"检测到文件删除: {file_path}")
+            logger.info(f"Detected file deletion: {file_path}")
             
             try:
                 if self.on_file_removed:
                     self.on_file_removed(file_path)
             except Exception as e:
-                logger.error(f"处理文件删除失败 {file_path}: {str(e)}")
+                logger.error(f"Failed to process file deletion {file_path}: {str(e)}")
     
     def on_modified(self, event: FileSystemEvent):
-        """处理文件修改事件"""
+        """Handle file modification event"""
         if event.is_directory:
             return
             
         file_path = event.src_path
         if self._should_process_file(file_path):
-            logger.info(f"检测到文件修改: {file_path}")
+            logger.info(f"Detected file modification: {file_path}")
             self._processing_files.add(file_path)
             
             try:
                 if self.on_file_modified:
-                    # 等待文件写入完成
+                    # Wait for file write completion
                     time.sleep(1)
                     self.on_file_modified(file_path)
             except Exception as e:
-                logger.error(f"处理文件修改失败 {file_path}: {str(e)}")
+                logger.error(f"Failed to process file modification {file_path}: {str(e)}")
             finally:
                 self._processing_files.discard(file_path)
 
 
 class FileSystemWatcher:
-    """文件系统监控器"""
+    """File system watcher"""
     
-    def __init__(self, watch_directory: str = None):
+    def __init__(self, watch_directory: Optional[str] = None):
         """
-        初始化文件系统监控器
+        Initialize file system watcher
         
         Args:
-            watch_directory: 要监控的目录路径
+            watch_directory: Directory path to watch
         """
         self.watch_directory = watch_directory or settings.vector_watch_directory
-        self.observer: Optional[Observer] = None
-        self.event_handler: Optional[DocumentFileHandler] = None
+        self.observer = None
+        self.event_handler = None
         self.is_running = False
         
-        # 回调函数
+        # Callback functions
         self._file_added_callbacks: List[Callable[[str], None]] = []
         self._file_removed_callbacks: List[Callable[[str], None]] = []
         self._file_modified_callbacks: List[Callable[[str], None]] = []
         
-        logger.info(f"文件系统监控器初始化，监控目录: {self.watch_directory}")
+        logger.info(f"File system watcher initialized, watching directory: {self.watch_directory}")
     
     def add_file_added_callback(self, callback: Callable[[str], None]):
-        """添加文件添加事件回调"""
+        """Add file addition event callback"""
         self._file_added_callbacks.append(callback)
     
     def add_file_removed_callback(self, callback: Callable[[str], None]):
-        """添加文件删除事件回调"""
+        """Add file deletion event callback"""
         self._file_removed_callbacks.append(callback)
     
     def add_file_modified_callback(self, callback: Callable[[str], None]):
-        """添加文件修改事件回调"""
+        """Add file modification event callback"""
         self._file_modified_callbacks.append(callback)
     
     def _on_file_added(self, file_path: str):
-        """处理文件添加事件"""
-        logger.info(f"文件添加事件: {file_path}")
+        """Handle file addition event"""
+        logger.info(f"File addition event: {file_path}")
         for callback in self._file_added_callbacks:
             try:
                 callback(file_path)
             except Exception as e:
-                logger.error(f"文件添加回调执行失败: {str(e)}")
+                logger.error(f"File addition callback execution failed: {str(e)}")
     
     def _on_file_removed(self, file_path: str):
-        """处理文件删除事件"""
-        logger.info(f"文件删除事件: {file_path}")
+        """Handle file deletion event"""
+        logger.info(f"File deletion event: {file_path}")
         for callback in self._file_removed_callbacks:
             try:
                 callback(file_path)
             except Exception as e:
-                logger.error(f"文件删除回调执行失败: {str(e)}")
+                logger.error(f"File deletion callback execution failed: {str(e)}")
     
     def _on_file_modified(self, file_path: str):
-        """处理文件修改事件"""
-        logger.info(f"文件修改事件: {file_path}")
+        """Handle file modification event"""
+        logger.info(f"File modification event: {file_path}")
         for callback in self._file_modified_callbacks:
             try:
                 callback(file_path)
             except Exception as e:
-                logger.error(f"文件修改回调执行失败: {str(e)}")
+                logger.error(f"File modification callback execution failed: {str(e)}")
     
     def start(self):
-        """启动文件系统监控"""
+        """Start file system monitoring"""
         if self.is_running:
-            logger.warning("文件系统监控器已在运行")
+            logger.warning("File system watcher is already running")
             return
         
-        # 确保监控目录存在
+        # Ensure watch directory exists
         watch_path = Path(self.watch_directory)
         if not watch_path.exists():
-            logger.error(f"监控目录不存在: {self.watch_directory}")
+            logger.error(f"Watch directory does not exist: {self.watch_directory}")
             return
         
-        # 创建事件处理器
+        # Create event handler
         self.event_handler = DocumentFileHandler(
             on_file_added=self._on_file_added,
             on_file_removed=self._on_file_removed,
             on_file_modified=self._on_file_modified
         )
         
-        # 创建观察者
+        # Create observer
         self.observer = Observer()
         self.observer.schedule(
             self.event_handler,
@@ -204,16 +206,16 @@ class FileSystemWatcher:
             recursive=True
         )
         
-        # 启动监控
+        # Start monitoring
         self.observer.start()
         self.is_running = True
         
-        logger.info(f"文件系统监控器已启动，监控目录: {self.watch_directory}")
+        logger.info(f"File system watcher started, watching directory: {self.watch_directory}")
     
     def stop(self):
-        """停止文件系统监控"""
+        """Stop file system monitoring"""
         if not self.is_running:
-            logger.warning("文件系统监控器未在运行")
+            logger.warning("File system watcher is not running")
             return
         
         if self.observer:
@@ -224,13 +226,13 @@ class FileSystemWatcher:
         self.event_handler = None
         self.is_running = False
         
-        logger.info("文件系统监控器已停止")
+        logger.info("File system watcher stopped")
     
     def __enter__(self):
-        """上下文管理器入口"""
+        """Context manager entry"""
         self.start()
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """上下文管理器出口"""
+        """Context manager exit"""
         self.stop() 
