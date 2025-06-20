@@ -472,13 +472,13 @@ class ConversationalRetrievalChain:
 
     def _get_standalone_question_chain(self):
         # 1. Get relevant documents
-        relevant_docs = self.retriever.invoke(question)
+        relevant_docs = self.retriever.invoke(self.question)
 
         # 2. Build context
         context = self._format_docs(relevant_docs)
 
         # 3. Generate standalone question
-        standalone_question = self._get_standalone_question(question, chat_history)
+        standalone_question = self._get_standalone_question(self.question, self.chat_history)
 
         # 4. Get relevant documents
         relevant_docs = self.retriever.invoke(standalone_question)
